@@ -1,0 +1,19 @@
+# dependencies
+/node_modules
+/.npm-cache
+
+# next.js
+/.next
+/out
+
+# local database (sqlite) — git管理外。スナップショットは scripts/data.mjs で管理
+/.data
+/.data-snapshots
+
+# env (secrets — never commit)
+.env
+.env.local
+.env*.local
+
+# misc
+.DS_Store

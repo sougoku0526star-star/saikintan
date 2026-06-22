@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(sleep 1; grep -iE \"error|failed|✓ Compiled|warn\" /tmp/saikintan-dev.log 2>/dev/null | tail -15 || echo \"no log \\(preview-managed server\\)\")",
+      "Read(//Users/bewiththeforce/Downloads/**)",
+      "Bash(python3 -)",
+      "Bash(curl -s -o /dev/null -w \"warmup HTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/analyze -H 'content-type: application/json' -d '{\"slug\":\"laksa\"}')",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/analyze -H 'content-type: application/json' -d '{\"slug\":\"laksa\",\"photo\":\"x.jpg\"}')",
+      "Bash(python3 -c \"import sys; d=sys.stdin.read\\(\\); print\\(d[:200]\\)\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" -X POST http://localhost:3000/api/analyze -H 'content-type: application/json' -d '{\"imageBase64\":\"ZmFrZQ==\",\"mimeType\":\"image/jpeg\",\"photo\":\"blob:x\"}')",
+      "Bash(python3 -c \"import sys; d=sys.stdin.read\\(\\); print\\(d[:240]\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"tsc exit: $?\")",
+      "Bash(node -e \"console.log\\('react-map-gl', require\\('./node_modules/react-map-gl/package.json'\\).version\\); console.log\\('mapbox-gl', require\\('./node_modules/mapbox-gl/package.json'\\).version\\)\")"
+    ]
+  }
+}
