@@ -11,6 +11,7 @@ import {
 } from "@/lib/created-store";
 import type { MealEntry } from "@/lib/mock-data";
 import JournalContent from "./JournalContent";
+import GohankunWidget from "./GohankunWidget";
 
 // サーバー(DB)から記録を解決して描画。編集・削除に対応。id はレコード固有ID。
 export default function DynamicJournal({ id }: { id: string }) {
@@ -30,6 +31,9 @@ export default function DynamicJournal({ id }: { id: string }) {
   if (record === null) {
     return (
       <div className="px-5 pt-24 text-center">
+        <div className="mb-4 flex justify-center">
+          <GohankunWidget state="sad" size="lg" bubble={false} />
+        </div>
         <p className="font-serif text-lg text-ink/70">この記録は見つかりませんでした</p>
         <p className="mt-2 text-[12px] text-ink/45">削除された可能性があります。</p>
         <Link

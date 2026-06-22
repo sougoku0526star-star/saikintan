@@ -11,7 +11,10 @@ export type GohankunState =
   | "thinking"
   | "proud"
   | "eating"
-  | "explaining";
+  | "explaining"
+  | "sing"
+  | "sleep"
+  | "sad";
 
 // 状態ごとの画像パスと、タップで巡回するセリフ候補（先頭が既定）
 const PRESET: Record<GohankunState, { img: string; lines: string[] }> = {
@@ -35,6 +38,24 @@ const PRESET: Record<GohankunState, { img: string; lines: string[] }> = {
     img: "/gohankun/gohankun-explaining.png",
     lines: ["ふむふむ、振り返ってみよう。", "今週の食を見てみたよ。", "メモしておいたよ！"],
   },
+  sing: {
+    img: "/gohankun/gohankun-sing.png",
+    lines: ["ラ〜ラ〜♪ 今日もいい日！", "鼻歌ごきげん〜♪", "さあ、はじめよう！"],
+  },
+  sleep: {
+    img: "/gohankun/gohankun-sleep.png",
+    lines: ["すぅ…すぅ…（解析中）", "むにゃ…もう少し待っててね", "Zzz…"],
+  },
+  sad: {
+    img: "/gohankun/gohankun-sad.png",
+    lines: ["あれ、ここはまだ空っぽみたい…", "しょんぼり…", "また一緒にがんばろ？"],
+  },
+};
+
+// 状態に応じた「待機アニメーション」
+const IDLE: Partial<Record<GohankunState, string>> = {
+  sleep: "animate-pulse [animation-duration:2.4s]",
+  sing: "animate-sway",
 };
 
 const SIZE: Record<"sm" | "md" | "lg", string> = {
@@ -100,8 +121,8 @@ export default function GohankunWidget({
       type="button"
       onClick={onTap}
       aria-label="ごはんくん"
-      className={`${SIZE[size]} shrink-0 origin-bottom animate-pop select-none transition-transform duration-200 hover:scale-105 active:scale-95 ${
-        bounce ? "animate-bounce" : ""
+      className={`${SIZE[size]} shrink-0 origin-bottom select-none transition-transform duration-200 hover:scale-105 active:scale-95 ${
+        bounce ? "animate-bounce" : IDLE[state] ?? "animate-pop"
       }`}
     >
       {imgOk ? (
@@ -207,7 +228,7 @@ function Face({ state }: { state: GohankunState }) {
   );
   const eye = (cx: number) => (
     <>
-      <circle cx={cx} cy="59" r="2.6" fill="#2B2722" />
+      <circle cx={cx} cy="59" r="2.6" fill="#3D312A" />
       <circle cx={cx - 0.8} cy="58.2" r="0.8" fill="#fff" />
     </>
   );
@@ -217,11 +238,11 @@ function Face({ state }: { state: GohankunState }) {
       return (
         <>
           {/* 怒り気味の眉 */}
-          <path d="M40 54 L47 56" stroke="#2B2722" strokeWidth="1.6" strokeLinecap="round" />
-          <path d="M60 54 L53 56" stroke="#2B2722" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="43" cy="60" r="2.3" fill="#2B2722" />
-          <circle cx="57" cy="60" r="2.3" fill="#2B2722" />
-          <path d="M46 66 Q50 64 54 66" stroke="#2B2722" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          <path d="M40 54 L47 56" stroke="#3D312A" strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M60 54 L53 56" stroke="#3D312A" strokeWidth="1.6" strokeLinecap="round" />
+          <circle cx="43" cy="60" r="2.3" fill="#3D312A" />
+          <circle cx="57" cy="60" r="2.3" fill="#3D312A" />
+          <path d="M46 66 Q50 64 54 66" stroke="#3D312A" strokeWidth="1.6" fill="none" strokeLinecap="round" />
           {/* 湯気 */}
           <path d="M68 36 Q72 33 69 30 Q66 28 69 25" stroke="#C9C3B6" strokeWidth="1.6" fill="none" strokeLinecap="round" />
         </>
@@ -232,7 +253,7 @@ function Face({ state }: { state: GohankunState }) {
         <>
           {cheeks}
           {eye(43)}
-          <path d="M55 59 Q57 57 59 59" stroke="#2B2722" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M55 59 Q57 57 59 59" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
           <path d="M45 65 Q50 70 55 65 Q50 67 45 65 Z" fill="#C96E4A" />
         </>
       );
@@ -243,9 +264,9 @@ function Face({ state }: { state: GohankunState }) {
           <circle cx="43" cy="60" r="4.2" fill="none" stroke="#B68A3E" strokeWidth="1.4" />
           <circle cx="57" cy="60" r="4.2" fill="none" stroke="#B68A3E" strokeWidth="1.4" />
           <path d="M47.2 60 L52.8 60" stroke="#B68A3E" strokeWidth="1.4" />
-          <circle cx="43" cy="60" r="2" fill="#2B2722" />
-          <circle cx="57" cy="60" r="2" fill="#2B2722" />
-          <path d="M46 66 Q50 68 54 66" stroke="#2B2722" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          <circle cx="43" cy="60" r="2" fill="#3D312A" />
+          <circle cx="57" cy="60" r="2" fill="#3D312A" />
+          <path d="M46 66 Q50 68 54 66" stroke="#3D312A" strokeWidth="1.4" fill="none" strokeLinecap="round" />
         </>
       );
     case "proud":
@@ -259,6 +280,49 @@ function Face({ state }: { state: GohankunState }) {
           <path d="M70 50 l1.2 2.4 2.4 1.2 -2.4 1.2 -1.2 2.4 -1.2 -2.4 -2.4 -1.2 2.4 -1.2 Z" fill="#B68A3E" />
         </>
       );
+    case "sing":
+      // 目を閉じてごきげんに歌う＋音符
+      return (
+        <>
+          {cheeks}
+          <path d="M40 60 Q43 57 46 60" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M54 60 Q57 57 60 60" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <ellipse cx="50" cy="66" rx="3.2" ry="4" fill="#C96E4A" />
+          {/* 音符 */}
+          <g stroke="#7C8B6F" strokeWidth="1.4" fill="#7C8B6F">
+            <circle cx="69" cy="44" r="2" />
+            <path d="M71 44 L71 34" fill="none" />
+            <path d="M71 34 q4 1 4 4" fill="none" />
+          </g>
+        </>
+      );
+    case "sleep":
+      // 目を閉じてZzz
+      return (
+        <>
+          <path d="M40 60 Q43 63 46 60" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M54 60 Q57 63 60 60" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <ellipse cx="50" cy="66" rx="1.6" ry="1.2" fill="#3D312A" opacity="0.5" />
+          {/* Zzz */}
+          <text x="64" y="40" fontSize="9" fill="#9AA38C" fontFamily="sans-serif" fontWeight="700">z</text>
+          <text x="70" y="33" fontSize="11" fill="#7C8B6F" fontFamily="sans-serif" fontWeight="700">Z</text>
+        </>
+      );
+    case "sad":
+      // しょんぼり（垂れ目＋への字口＋汗）
+      return (
+        <>
+          <ellipse cx="37" cy="63" rx="3" ry="1.8" fill="#E8A088" opacity="0.6" />
+          <ellipse cx="63" cy="63" rx="3" ry="1.8" fill="#E8A088" opacity="0.6" />
+          <path d="M40 58 L46 61" stroke="#3D312A" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M60 58 L54 61" stroke="#3D312A" strokeWidth="1.4" strokeLinecap="round" />
+          <circle cx="43" cy="61" r="2.2" fill="#3D312A" />
+          <circle cx="57" cy="61" r="2.2" fill="#3D312A" />
+          <path d="M46 67 Q50 64 54 67" stroke="#3D312A" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          {/* 汗 */}
+          <path d="M64 55 q2 3 0 5 q-2 -2 0 -5 Z" fill="#8FB8D8" />
+        </>
+      );
     case "happy":
     default:
       return (
@@ -266,7 +330,7 @@ function Face({ state }: { state: GohankunState }) {
           {cheeks}
           {eye(43)}
           {eye(57)}
-          <path d="M45 64 Q50 69 55 64" stroke="#2B2722" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M45 64 Q50 69 55 64" stroke="#3D312A" strokeWidth="1.8" fill="none" strokeLinecap="round" />
         </>
       );
   }

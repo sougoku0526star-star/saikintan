@@ -8,6 +8,7 @@ import {
   ALBUM_UPDATED,
   type CreatedEntry,
 } from "@/lib/created-store";
+import GohankunWidget from "./GohankunWidget";
 
 const tilts = ["rotate-1", "-rotate-1", "rotate-2", "-rotate-2"];
 
@@ -60,7 +61,10 @@ export default function CreatedSection() {
 
   if (recent.length === 0) {
     return (
-      <div className="rounded-2xl bg-white/50 p-8 text-center ring-1 ring-black/[0.04]">
+      <div className="rounded-3xl bg-cream/70 p-8 text-center shadow-soft ring-1 ring-ink/[0.04]">
+        <div className="mb-3 flex justify-center">
+          <GohankunWidget state="sad" size="md" bubble={false} />
+        </div>
         <p className="text-[13px] text-ink/50">直近1週間の記録はまだありません</p>
         {hasOlder && (
           <Link

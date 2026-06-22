@@ -181,9 +181,10 @@ export default function UploadFlow() {
           </p>
 
           {error && (
-            <p className="mb-4 rounded-lg bg-clay/10 px-3 py-2 text-[12px] text-clay">
-              {error}
-            </p>
+            <div className="mb-4 flex items-center gap-3 rounded-2xl bg-clay/10 px-3 py-3">
+              <GohankunWidget state="sad" size="sm" bubble={false} />
+              <p className="flex-1 text-[12px] text-clay">{error}</p>
+            </div>
           )}
 
           <input
@@ -252,9 +253,9 @@ export default function UploadFlow() {
             </div>
           </div>
 
-          {/* ごはんくんが解析中をナビゲート */}
+          {/* ごはんくんは解析中おやすみ中（ゆっくりpulse） */}
           <div className="mt-4 flex justify-center">
-            <GohankunWidget state="thinking" size="sm" bubblePosition="right" />
+            <GohankunWidget state="sleep" size="sm" bubblePosition="right" />
           </div>
 
           <div className="mt-5 space-y-2.5">

@@ -10,6 +10,7 @@ import {
   type ChatMessage,
   type SharedRecord,
 } from "@/lib/friends";
+import GohankunWidget from "./GohankunWidget";
 
 export default function ChatThread({ id }: { id: string }) {
   const [friend, setFriend] = useState<Brief | null>(null);
@@ -62,6 +63,9 @@ export default function ChatThread({ id }: { id: string }) {
   if (state === "forbidden") {
     return (
       <div className="px-5 pt-24 text-center">
+        <div className="mb-4 flex justify-center">
+          <GohankunWidget state="sad" size="lg" bubble={false} />
+        </div>
         <p className="font-serif text-lg text-ink/70">表示できません</p>
         <p className="mt-2 text-[12px] text-ink/45">フレンドのみメッセージできます。</p>
         <Link href="/messages" className="mt-6 inline-block rounded-full bg-clay px-5 py-2.5 text-[13px] text-cream">

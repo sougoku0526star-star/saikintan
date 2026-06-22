@@ -10,6 +10,9 @@
 | `gohankun-proud.png` | `proud` | 日本国旗を掲げてガッツポーズの絵 |
 | `gohankun-eating.png` | `eating` | ウインクしてお箸で寿司を食べている絵 |
 | `gohankun-explaining.png` | `explaining` | メガネをかけて巻物（手紙）を持っている絵 |
+| `gohankun-sing.png` | `sing` | 目を閉じてごきげんに歌っている絵（ホームのあいさつ） |
+| `gohankun-sleep.png` | `sleep` | すやすや眠っている絵（解析中のローディング） |
+| `gohankun-sad.png` | `sad` | しょんぼりした絵（空っぽ/エラー画面） |
 
 - 推奨: 正方形・透過PNG（背景透過だと一番きれい）。512px 前後でOK。
 - 差し替えるだけで反映されます（コードの変更は不要）。
