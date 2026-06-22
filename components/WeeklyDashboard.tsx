@@ -19,6 +19,7 @@ import {
   SETTINGS_UPDATED,
   DEFAULT_MONTHLY_BUDGET_SGD,
 } from "@/lib/settings";
+import GohankunWidget from "./GohankunWidget";
 
 function todayISO() {
   const d = new Date();
@@ -118,6 +119,11 @@ export default function WeeklyDashboard() {
         <p className="text-[12px] tracking-[0.3em] text-clay">WEEKLY LETTER</p>
         <h1 className="font-serif text-3xl font-semibold text-ink">ふりかえり</h1>
       </header>
+
+      {/* ごはんくんのねぎらい */}
+      <div className="mb-5">
+        <GohankunWidget state="proud" size="sm" />
+      </div>
 
       {/* 週/月トグル */}
       <div className="mb-3 inline-flex rounded-full bg-ink/[0.06] p-1 text-[12px]">
@@ -221,9 +227,10 @@ export default function WeeklyDashboard() {
                     </p>
                   ))}
                 </div>
-                <p className="mt-6 text-right font-serif text-[13px] italic text-clay/80">
-                  {letter.sign}
-                </p>
+                <div className="mt-6 flex items-end justify-end gap-2">
+                  <p className="font-serif text-[13px] italic text-clay/80">{letter.sign}</p>
+                  <GohankunWidget state="explaining" size="sm" bubble={false} />
+                </div>
               </>
             ) : (
               <p className="py-6 text-center text-[13px] text-ink/40">

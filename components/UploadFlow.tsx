@@ -17,6 +17,7 @@ import { recordCandidate } from "@/lib/candidates-store";
 import type { MealEntry } from "@/lib/mock-data";
 import { prepareImage } from "@/lib/image";
 import MealEditForm from "./MealEditForm";
+import GohankunWidget from "./GohankunWidget";
 
 type Phase = "closed" | "pick" | "analyze" | "confirm";
 
@@ -249,6 +250,11 @@ export default function UploadFlow() {
               <Sparkles className="h-3 w-3 animate-twinkle text-clay" />
               AIが解析中
             </div>
+          </div>
+
+          {/* ごはんくんが解析中をナビゲート */}
+          <div className="mt-4 flex justify-center">
+            <GohankunWidget state="thinking" size="sm" bubblePosition="right" />
           </div>
 
           <div className="mt-5 space-y-2.5">

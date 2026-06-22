@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import CreatedSection from "@/components/CreatedSection";
+import GohankunWidget from "@/components/GohankunWidget";
 
 export default function HomePage() {
   return (
@@ -29,6 +30,11 @@ export default function HomePage() {
           </span>
         </Link>
       </header>
+
+      {/* ごはんくんのあいさつ */}
+      <div className="mb-7">
+        <GohankunWidget state="happy" size="sm" />
+      </div>
 
       {/* タイムライン（デモ記録もユーザー記録も同じストアから） */}
       <CreatedSection />
