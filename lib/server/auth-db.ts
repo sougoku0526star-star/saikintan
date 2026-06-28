@@ -11,10 +11,12 @@ export interface AuthUser {
   id: string;
   email: string;
   username: string | null;
+  nickname: string | null;
   emailVerified: boolean;
 }
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+const NICKNAME_MAX = 20;
 
 function hashPassword(pw: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -43,7 +45,7 @@ export function createUser(email: string, password: string): AuthUser | null {
       "INSERT INTO users (id, email, password_hash, created_at) VALUES (?,?,?,?)"
     )
     .run(id, norm, hashPassword(password), Date.now());
-  return { id, email: norm, username: null, emailVerified: false };
+  return { id, email: norm, username: null, nickname: null, emailVerified: false };
 }
 
 /** メール＋パスワード検証。 */
@@ -51,16 +53,17 @@ export function authenticate(email: string, password: string): AuthUser | null {
   const norm = email.trim().toLowerCase();
   const row = getDb()
     .prepare(
-      "SELECT id, email, username, email_verified, password_hash FROM users WHERE email = ?"
+      "SELECT id, email, username, nickname, email_verified, password_hash FROM users WHERE email = ?"
     )
     .get(norm) as
-    | { id: string; email: string; username: string | null; email_verified: number; password_hash: string }
+    | { id: string; email: string; username: string | null; nickname: string | null; email_verified: number; password_hash: string }
     | undefined;
   if (!row || !verifyPassword(password, row.password_hash)) return null;
   return {
     id: row.id,
     email: row.email,
     username: row.username ?? null,
+    nickname: row.nickname ?? null,
     emailVerified: !!row.email_verified,
   };
 }
@@ -82,15 +85,16 @@ export function getSessionUserId(token: string): string | undefined {
 
 export function getUserById(id: string): AuthUser | undefined {
   const row = getDb()
-    .prepare("SELECT id, email, username, email_verified FROM users WHERE id = ?")
+    .prepare("SELECT id, email, username, nickname, email_verified FROM users WHERE id = ?")
     .get(id) as
-    | { id: string; email: string; username: string | null; email_verified: number }
+    | { id: string; email: string; username: string | null; nickname: string | null; email_verified: number }
     | undefined;
   if (!row) return undefined;
   return {
     id: row.id,
     email: row.email,
     username: row.username ?? null,
+    nickname: row.nickname ?? null,
     emailVerified: !!row.email_verified,
   };
 }
@@ -111,6 +115,20 @@ export function setUsername(userId: string, username: string): UsernameResult {
     .get(u, userId) as { id: string } | undefined;
   if (taken) return "taken";
   getDb().prepare("UPDATE users SET username = ? WHERE id = ?").run(u, userId);
+  return "ok";
+}
+
+// ---- ニックネーム（自由入力の表示名。ごはんくんの呼びかけに使う） ---------
+
+export type NicknameResult = "ok" | "invalid";
+
+/** ニックネームを設定。空文字なら解除（NULL）。20文字以内・改行不可。 */
+export function setNickname(userId: string, nickname: string): NicknameResult {
+  const n = nickname.replace(/[\r\n\t]/g, " ").trim();
+  if (n.length > NICKNAME_MAX) return "invalid";
+  getDb()
+    .prepare("UPDATE users SET nickname = ? WHERE id = ?")
+    .run(n || null, userId);
   return "ok";
 }
 
@@ -184,15 +202,16 @@ export function getUserByUsername(username: string): { id: string; username: str
 export function findUserByEmail(email: string): AuthUser | undefined {
   const norm = email.trim().toLowerCase();
   const row = getDb()
-    .prepare("SELECT id, email, username, email_verified FROM users WHERE email = ?")
+    .prepare("SELECT id, email, username, nickname, email_verified FROM users WHERE email = ?")
     .get(norm) as
-    | { id: string; email: string; username: string | null; email_verified: number }
+    | { id: string; email: string; username: string | null; nickname: string | null; email_verified: number }
     | undefined;
   if (!row) return undefined;
   return {
     id: row.id,
     email: row.email,
     username: row.username ?? null,
+    nickname: row.nickname ?? null,
     emailVerified: !!row.email_verified,
   };
 }

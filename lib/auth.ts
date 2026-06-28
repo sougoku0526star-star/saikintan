@@ -7,6 +7,7 @@ export const AUTH_UPDATED = "saikintan:auth-updated";
 export interface AuthUser {
   email: string;
   username: string | null;
+  nickname: string | null;
   emailVerified: boolean;
 }
 
@@ -82,6 +83,12 @@ export async function setUsername(username: string) {
   const { ok, data } = await postJson("/api/account/username", { username });
   if (ok) broadcast();
   return { ok, error: data.error as string | undefined, username: data.username as string | undefined };
+}
+
+export async function setNickname(nickname: string) {
+  const { ok, data } = await postJson("/api/account/nickname", { nickname });
+  if (ok) broadcast();
+  return { ok, error: data.error as string | undefined, nickname: data.nickname as string | null | undefined };
 }
 
 export async function searchUsers(q: string): Promise<{ id: string; username: string }[]> {

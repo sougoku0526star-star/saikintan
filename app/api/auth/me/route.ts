@@ -7,7 +7,12 @@ export async function GET() {
   const user = getAuthUser();
   return NextResponse.json({
     user: user
-      ? { email: user.email, username: user.username, emailVerified: user.emailVerified }
+      ? {
+          email: user.email,
+          username: user.username,
+          nickname: user.nickname,
+          emailVerified: user.emailVerified,
+        }
       : null,
   });
 }

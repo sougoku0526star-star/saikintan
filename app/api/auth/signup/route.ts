@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   );
 
   return NextResponse.json({
-    user: { email: user.email, username: user.username, emailVerified: false },
+    user: { email: user.email, username: user.username, nickname: null, emailVerified: false },
     devVerifyUrl: mail.devLink,
   });
 }

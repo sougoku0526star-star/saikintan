@@ -110,6 +110,7 @@ export function getDb(): DatabaseSync {
   for (const sql of [
     "ALTER TABLE users ADD COLUMN username TEXT",
     "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN nickname TEXT",
     "ALTER TABLE messages ADD COLUMN record TEXT",
   ]) {
     try {

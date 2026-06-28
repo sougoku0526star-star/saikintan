@@ -10,6 +10,7 @@ import {
   LogOut,
   CloudOff,
   AtSign,
+  Smile,
   MailCheck,
   MailWarning,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
   fetchMe,
   logout,
   setUsername as setUsernameApi,
+  setNickname as setNicknameApi,
   resendVerification,
   AUTH_UPDATED,
   type AuthUser,
@@ -35,6 +37,8 @@ export default function SettingsScreen() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [unameDraft, setUnameDraft] = useState("");
   const [unameMsg, setUnameMsg] = useState<{ ok?: boolean; text: string } | null>(null);
+  const [nickDraft, setNickDraft] = useState("");
+  const [nickMsg, setNickMsg] = useState<{ ok?: boolean; text: string } | null>(null);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,6 +57,7 @@ export default function SettingsScreen() {
       fetchMe().then((u) => {
         setUser(u);
         setUnameDraft(u?.username ?? "");
+        setNickDraft(u?.nickname ?? "");
       });
     loadMe();
     window.addEventListener(AUTH_UPDATED, loadMe);
@@ -73,6 +78,17 @@ export default function SettingsScreen() {
     const res = await setUsernameApi(unameDraft);
     if (res.ok) setUnameMsg({ ok: true, text: "保存しました" });
     else setUnameMsg({ ok: false, text: res.error || "保存できませんでした" });
+  };
+
+  const saveNickname = async () => {
+    setNickMsg(null);
+    const res = await setNicknameApi(nickDraft);
+    if (res.ok) {
+      setNickMsg({ ok: true, text: "保存しました" });
+      setUser((u) => (u ? { ...u, nickname: res.nickname ?? null } : u));
+    } else {
+      setNickMsg({ ok: false, text: res.error || "保存できませんでした" });
+    }
   };
 
   const resend = async () => {
@@ -135,6 +151,41 @@ export default function SettingsScreen() {
                   )}
                 </div>
               )}
+
+              {/* ニックネーム（ごはんくんの呼びかけに使われる表示名） */}
+              <div className="mt-4 border-t border-black/5 pt-4">
+                <label className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink/55">
+                  <Smile className="h-3.5 w-3.5" />
+                  ニックネーム（ごはんくんがこの名前で呼びかけます）
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={nickDraft}
+                    onChange={(e) => {
+                      setNickDraft(e.target.value);
+                      setNickMsg(null);
+                    }}
+                    placeholder="ゆうと"
+                    maxLength={20}
+                    className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2 text-[14px] text-ink focus:border-clay focus:outline-none"
+                  />
+                  <button
+                    onClick={saveNickname}
+                    disabled={nickDraft.trim() === (user.nickname ?? "")}
+                    className="rounded-lg bg-clay px-4 py-2 text-[12px] font-medium text-cream active:scale-95 disabled:opacity-40"
+                  >
+                    保存
+                  </button>
+                </div>
+                {nickMsg && (
+                  <p className={`mt-1.5 text-[11px] ${nickMsg.ok ? "text-sage" : "text-clay"}`}>
+                    {nickMsg.text}
+                  </p>
+                )}
+                <p className="mt-1 text-[10px] text-ink/35">
+                  20文字以内・日本語OK（未設定なら「君」と呼びます）
+                </p>
+              </div>
 
               {/* ユーザーID（ハンドル） */}
               <div className="mt-4 border-t border-black/5 pt-4">

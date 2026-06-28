@@ -91,7 +91,8 @@ export async function POST(req: Request) {
     try {
       // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
       const userFoods: UserFoodLite[] = listFoods(getUserId());
-      const userName = getAuthUser()?.username ?? null;
+      const me = getAuthUser();
+      const userName = me?.nickname ?? me?.username ?? null;
       const analysis = await analyzeWithClaude(
         body.imageBase64,
         toMedia(body.mimeType),

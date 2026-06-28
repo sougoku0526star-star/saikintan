@@ -38,7 +38,8 @@ export async function POST(req: Request) {
 
   try {
     const client = new Anthropic();
-    const userName = getAuthUser()?.username ?? null;
+    const me = getAuthUser();
+    const userName = me?.nickname ?? me?.username ?? null;
     const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
     const prompt = `${you}の${term}の食事記録の集計だよ。これをもとに、ごはんくんから
