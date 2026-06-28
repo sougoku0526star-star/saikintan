@@ -52,3 +52,18 @@ node scripts/data.mjs reset       # → サーバー再起動でデモ再シー�
 
 - `baseline` … クリーンなデモ初期状態
 - `dev` … dev ブランチ用
+
+## トラブルシュート
+
+### 白画面に文字だけ／`Cannot find module './XXXX.js'`
+Next.js dev の `.next` ビルドキャッシュ破損が原因（コードのバグではない）。
+長時間の稼働・HMRの繰り返し・`tailwind.config` 変更などで中間生成物が
+不整合になると、CSS/ページチャンクの配信が失敗し、スタイルが当たらなくなる。
+
+```sh
+# 開発サーバーを止めてから
+rm -rf .next
+npm run dev   # またはプレビューを再起動（クリーンビルド）
+```
+
+> `tailwind.config.ts` を変更したときも、確実に反映するにはサーバー再起動が安全。
