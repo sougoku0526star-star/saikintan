@@ -9,9 +9,10 @@ import {
   type UserFoodLite,
 } from "@/lib/nutrition";
 import { foods } from "@/lib/nutrition-data";
-import { getUserId } from "@/lib/server/user";
+import { getUserId, getAuthUser } from "@/lib/server/user";
 import { listFoods } from "@/lib/server/db";
 import { MAPBOX_TOKEN } from "@/lib/mapbox";
+import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
 
 // 場所名 → 座標（Mapbox Geocoding、シンガポール近傍を優先）
 async function geocode(
@@ -90,10 +91,12 @@ export async function POST(req: Request) {
     try {
       // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
       const userFoods: UserFoodLite[] = listFoods(getUserId());
+      const userName = getAuthUser()?.username ?? null;
       const analysis = await analyzeWithClaude(
         body.imageBase64,
         toMedia(body.mimeType),
-        userFoods
+        userFoods,
+        userName
       );
 
       // 位置：写真EXIFのGPSがあれば優先、無ければ場所名をジオコーディング
@@ -197,7 +200,11 @@ const RESULT_SCHEMA = {
     dish_name_en: { type: "string", description: "料理名（英語）。slugが'none'でも必ず記入" },
     dish_name_ja: { type: "string", description: "料理名（日本語）。slugが'none'でも必ず記入" },
     portions: { type: "number", description: "標準1人前を1.0とした分量倍率（辞書ヒット時のスケール用）" },
-    caption: { type: "string", description: "日本語30〜60字のエモい日記風キャプション" },
+    caption: {
+      type: "string",
+      description:
+        "キャラクター「ごはんくん」がユーザーに語りかける日記風コメント（日本語・2〜3文・60〜120字）。料理名や場所に触れ、やさしくゆるい口調で、海外でがんばるユーザーを応援する一言。",
+    },
     location: { type: "string", description: "推測できる場所。不明なら 'Singapore'" },
     confidence: { type: "number", description: "料理判定の自信度 0.0〜1.0" },
     calories: { type: "number", description: "写真に写っている量に対する推定カロリー(kcal)" },
@@ -226,9 +233,11 @@ const RESULT_SCHEMA = {
 async function analyzeWithClaude(
   imageBase64: string,
   mediaType: SupportedMedia,
-  userFoods: UserFoodLite[] = []
+  userFoods: UserFoodLite[] = [],
+  userName: string | null = null
 ): Promise<VisionResult> {
   const client = new Anthropic(); // ANTHROPIC_API_KEY を環境から自動取得
+  const you = gohankunYou(userName);
 
   const standardList = foodTaxonomy()
     .map((t) => `${t.slug}\t${t.name}`)
@@ -241,15 +250,20 @@ async function analyzeWithClaude(
     ? `\n\n# あなたの辞書（最優先で照合。一致すればこのslugを返す）\n${userList}`
     : "";
 
-  const prompt = `あなたは料理と栄養に詳しい管理栄養士です。
-食事の写真を見て、下の2つのリストから最も一致するものを slug で1つだけ選んでください。
+  const prompt = `次の食事写真を分析してください。料理の判定と栄養の数値は、空想ではなく
+現実的で正確に見積もること（ここはプロの栄養士として厳密に）。
+
+下の2つのリストから最も一致するものを slug で1つだけ選んでください。
 まず「あなたの辞書」を優先的に照合し、無ければ「標準の料理リスト」を見ます。
 どちらにも該当が無ければ slug を "none" にしてください。
 
 slug が "none" の場合でも、写真から料理名（英語・日本語）を推定し、
 写真に写っている量に対する栄養（カロリー・タンパク質・脂質・炭水化物・塩分）を
-あなたの知識でできる限り正確に見積もってください。料理が辞書にあってもなくても、
+できる限り正確に見積もってください。料理が辞書にあってもなくても、
 これらの推定値は必ず記入してください。
+
+ただし caption フィールドだけは、キャラクター「ごはんくん」として
+${you}に語りかける日記風コメントを書いてください（system の人格・口調に従う）。
 ${userSection}
 
 # 標準の料理リスト（slug<TAB>料理名）
@@ -259,6 +273,7 @@ ${standardList}`;
   const msg = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
+    system: gohankunSystemPrompt(userName),
     messages: [
       {
         role: "user",

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fallbackLetter, type PeriodStats, type WeeklyLetter } from "@/lib/weekly";
+import { getAuthUser } from "@/lib/server/user";
+import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
 
 export const runtime = "nodejs";
 
@@ -9,13 +11,13 @@ const MODEL = process.env.ANALYZE_MODEL || "claude-opus-4-8";
 const SCHEMA = {
   type: "object",
   properties: {
-    greeting: { type: "string", description: "一文の挨拶" },
+    greeting: { type: "string", description: "ごはんくんからの一文の挨拶" },
     body: {
       type: "array",
       items: { type: "string" },
-      description: "本文（2〜3段落）",
+      description: "ごはんくんからの本文（2〜3段落）",
     },
-    sign: { type: "string", description: "署名（例: — あなたの彩金譚より）" },
+    sign: { type: "string", description: "署名（必ず「— ごはんくんより」）" },
   },
   required: ["greeting", "body", "sign"],
   additionalProperties: false,
@@ -36,14 +38,17 @@ export async function POST(req: Request) {
 
   try {
     const client = new Anthropic();
+    const userName = getAuthUser()?.username ?? null;
+    const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
-    const prompt = `あなたは食事ログアプリ「彩金譚」のAIです。
-ユーザーの${term}の食事記録の集計をもとに、温かく前向きな短い手紙を日本語で書いてください。
+    const prompt = `${you}の${term}の食事記録の集計だよ。これをもとに、ごはんくんから
+${you}へ、あたたかく前向きな短い手紙を日本語で書いてください。
 
 # ルール
-- 具体的な数値（食費・予算・栄養傾向）に自然に触れる
-- 責めない。我慢ではなく「彩りを足す」トーンで、軽い提案を1つ
-- body は2〜3段落、各60〜120字程度。署名は「— あなたの彩金譚より」
+- 具体的な数値（食費・予算・栄養傾向）に、ごはんくんらしく自然に触れる
+- 責めない。サボり気味・栄養が偏っていても、怒らず「寂しがる・心配する」寄り添いトーンで、軽い提案を1つ
+- 海外でがんばる${you}に寄り添うあたたかい一言を必ず添える
+- body は2〜3段落、各60〜120字程度。署名は必ず「— ごはんくんより」
 
 # ${term}の集計
 - 期間: ${stats.label}
@@ -57,6 +62,7 @@ export async function POST(req: Request) {
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 700,
+      system: gohankunSystemPrompt(userName),
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
     } as Anthropic.MessageCreateParamsNonStreaming);
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
     const letter: WeeklyLetter = {
       greeting: String(json.greeting ?? ""),
       body: Array.isArray(json.body) ? json.body.map(String) : [],
-      sign: String(json.sign ?? "— あなたの彩金譚より"),
+      sign: String(json.sign ?? "— ごはんくんより"),
     };
     if (!letter.greeting || letter.body.length === 0) throw new Error("empty letter");
     return NextResponse.json({ letter, source: "ai" });

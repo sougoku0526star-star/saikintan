@@ -169,19 +169,20 @@ export function fallbackLetter(s: PeriodStats): WeeklyLetter {
         : "タンパク質";
   const avg = s.mealsCount ? Math.round(s.calories / s.mealsCount) : 0;
   return {
-    greeting: `${term}もおつかれさま。`,
+    greeting: `${term}もおつかれさま！`,
     body: [
-      `${term}は${s.mealsCount}食を記録、食費は S$${s.totalSgd.toFixed(1)}（約 ¥${s.totalJpy.toLocaleString()}）。予算 S$${s.budgetSgd} に対して ${s.budgetPct}% でした。${
-        within ? "きちんと予算内に収まっていて、いいペースです。" : "少し予算を超えています。配分を意識してみましょう。"
+      `${term}は${s.mealsCount}食を記録してくれたね。食費は S$${s.totalSgd.toFixed(1)}（約 ¥${s.totalJpy.toLocaleString()}）、予算 S$${s.budgetSgd} に対して ${s.budgetPct}% だよ。${
+        within ? "ちゃんと予算におさまってて、いいペース！僕もうれしいなー。" : "ちょっとだけ予算オーバーかな…無理しない範囲で配分を気にしてみよ？"
       }`,
-      `1食あたり平均 ${avg} kcal。カロリー比では${dominant}が中心の${term === "今週" ? "一週間" : "一か月"}でした。${
+      `1食あたり平均 ${avg} kcal。カロリー比だと${dominant}が中心の${term === "今週" ? "一週間" : "一か月"}だったみたい。${
         dominant === "炭水化物"
-          ? "野菜やタンパク質の一皿を足すと、彩りよく整います。"
+          ? "お野菜やタンパク質の一皿を足すと、もっと彩りよくなるよ！"
           : dominant === "脂質"
-            ? "揚げ物が続いたら、蒸し・茹での一皿を一度はさんでみましょう。"
-            : "良いバランスです。この調子で楽しみながら続けましょう。"
+            ? "揚げ物がつづいたら、蒸し・ゆでの一皿もはさんでみよ？"
+            : "すごくいいバランス！この調子で楽しみながらいこうね。"
       }`,
+      `遠いところでがんばってる君を、僕はいつも応援してるよ。また次のごはん、楽しみにしてるね！`,
     ],
-    sign: "— あなたの彩金譚より",
+    sign: "— ごはんくんより",
   };
 }
