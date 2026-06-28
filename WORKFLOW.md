@@ -57,8 +57,10 @@ node scripts/data.mjs reset       # → サーバー再起動でデモ再シー�
 
 ### 白画面に文字だけ／`Cannot find module './XXXX.js'`
 Next.js dev の `.next` ビルドキャッシュ破損が原因（コードのバグではない）。
-長時間の稼働・HMRの繰り返し・`tailwind.config` 変更などで中間生成物が
-不整合になると、CSS/ページチャンクの配信が失敗し、スタイルが当たらなくなる。
+よくある引き金:
+- **dev サーバー稼働中に `npm run build` を実行**（本番成果物が同じ `.next` を上書きし、dev のチャンクと食い違う）← 最頻
+- 長時間の稼働・HMRの繰り返し
+- `tailwind.config` の変更
 
 ```sh
 # 開発サーバーを止めてから
@@ -66,4 +68,7 @@ rm -rf .next
 npm run dev   # またはプレビューを再起動（クリーンビルド）
 ```
 
+> ⚠️ **`npm run build` は dev/プレビューを止めてから実行する**（並行実行で `.next` が壊れる）。
+> 型だけ確認したいときは `npx tsc --noEmit` で十分。ビルド検証が必要なときは
+> 「プレビュー停止 → `npm run build` → プレビュー再開」の順で。
 > `tailwind.config.ts` を変更したときも、確実に反映するにはサーバー再起動が安全。
