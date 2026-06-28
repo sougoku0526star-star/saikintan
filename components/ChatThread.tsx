@@ -64,7 +64,7 @@ export default function ChatThread({ id }: { id: string }) {
     return (
       <div className="px-5 pt-24 text-center">
         <div className="mb-4 flex justify-center">
-          <GohankunWidget state="sad" size="lg" bubble={false} />
+          <GohankunWidget state="warning" size="lg" bubble={false} />
         </div>
         <p className="font-serif text-lg text-ink/70">表示できません</p>
         <p className="mt-2 text-[12px] text-ink/45">フレンドのみメッセージできます。</p>

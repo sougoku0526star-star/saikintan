@@ -182,7 +182,7 @@ export default function UploadFlow() {
 
           {error && (
             <div className="mb-4 flex items-center gap-3 rounded-2xl bg-clay/10 px-3 py-3">
-              <GohankunWidget state="sad" size="sm" bubble={false} />
+              <GohankunWidget state="warning" size="sm" bubble={false} />
               <p className="flex-1 text-[12px] text-clay">{error}</p>
             </div>
           )}
@@ -253,9 +253,9 @@ export default function UploadFlow() {
             </div>
           </div>
 
-          {/* ごはんくんは解析中おやすみ中（ゆっくりpulse） */}
+          {/* ごはんくんは解析中おやすみ中（呼吸のようにゆっくりpulse） */}
           <div className="mt-4 flex justify-center">
-            <GohankunWidget state="sleep" size="sm" bubblePosition="right" />
+            <GohankunWidget state="loading" size="sm" bubblePosition="right" />
           </div>
 
           <div className="mt-5 space-y-2.5">

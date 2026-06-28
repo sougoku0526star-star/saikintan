@@ -61,6 +61,14 @@ const config: Config = {
           "0%, 100%": { transform: "rotate(-4deg)" },
           "50%": { transform: "rotate(4deg)" },
         },
+        // しょんぼり：寂しそうに小刻みに震える
+        shake: {
+          "0%, 100%": { transform: "translateX(0) rotate(0deg)" },
+          "20%": { transform: "translateX(-2px) rotate(-1.5deg)" },
+          "40%": { transform: "translateX(2px) rotate(1.5deg)" },
+          "60%": { transform: "translateX(-2px) rotate(-1.5deg)" },
+          "80%": { transform: "translateX(2px) rotate(1.5deg)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.6s ease-out both",
@@ -69,6 +77,7 @@ const config: Config = {
         "sheet-up": "sheet-up 0.35s cubic-bezier(0.22,1,0.36,1) both",
         twinkle: "twinkle 1.4s ease-in-out infinite",
         sway: "sway 2.2s ease-in-out infinite",
+        shake: "shake 0.8s ease-in-out infinite",
       },
     },
   },

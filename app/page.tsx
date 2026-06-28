@@ -31,9 +31,9 @@ export default function HomePage() {
         </Link>
       </header>
 
-      {/* ごはんくんのあいさつ（歌ってごきげん） */}
+      {/* ごはんくんのあいさつ（歌ってごきげん・ピョコピョコ跳ねる） */}
       <div className="mb-7">
-        <GohankunWidget state="sing" size="sm" />
+        <GohankunWidget state="welcome" size="sm" />
       </div>
 
       {/* タイムライン（デモ記録もユーザー記録も同じストアから） */}

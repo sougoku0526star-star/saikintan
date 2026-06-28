@@ -7,6 +7,11 @@ import { useEffect, useState } from "react";
 // インラインSVGのフォールバックで表示が崩れないようにしている。
 
 export type GohankunState =
+  // アプリ状態に対応するセマンティックな状態（推奨）
+  | "welcome" // ホーム（歌う：ピョコピョコ跳ねる）
+  | "loading" // AI解析中（寝る：呼吸のように点滅）
+  | "warning" // サボり気味・エラー（しょんぼり：ブルブル震える）
+  // 表情ベースの状態
   | "happy"
   | "thinking"
   | "proud"
@@ -18,6 +23,30 @@ export type GohankunState =
 
 // 状態ごとの画像パスと、タップで巡回するセリフ候補（先頭が既定）
 const PRESET: Record<GohankunState, { img: string; lines: string[] }> = {
+  welcome: {
+    img: "/gohankun/gohankun-sing.png",
+    lines: [
+      "今日のごはんはなーに？思い出に残そう！",
+      "ラ〜ラ〜♪ いい一日にしよ！",
+      "写真を1枚、ぼくに見せて！",
+    ],
+  },
+  loading: {
+    img: "/gohankun/gohankun-sleep.png",
+    lines: [
+      "くんくん…料理の匂いを嗅いで思い出を整理してるよ…",
+      "むにゃ…もうちょっとで分かりそう…",
+      "Zzz…おいしそうな夢を見てる…",
+    ],
+  },
+  warning: {
+    img: "/gohankun/gohankun-sad.png",
+    lines: [
+      "最近ごはんの写真がなくて寂しいな…元気にしてる？",
+      "また一緒に記録、はじめよ？",
+      "きみのごはん、見せてほしいな…",
+    ],
+  },
   happy: {
     img: "/gohankun/gohankun-happy.png",
     lines: ["今日も美味しそうだね！", "なに食べたの？教えて！", "記録、えらい！", "おなかすいてきた…"],
@@ -52,10 +81,15 @@ const PRESET: Record<GohankunState, { img: string; lines: string[] }> = {
   },
 };
 
-// 状態に応じた「待機アニメーション」
+// 状態に応じた「待機アニメーション」（Duolingo風に静止画を動かす）
 const IDLE: Partial<Record<GohankunState, string>> = {
-  sleep: "animate-pulse [animation-duration:2.4s]",
+  welcome: "animate-bounce", // ピョコピョコ跳ねる
+  loading: "animate-pulse [animation-duration:2.4s]", // 呼吸のように点滅
+  warning: "animate-shake", // 寂しそうに震える
+  // 表情ベース状態の待機
   sing: "animate-sway",
+  sleep: "animate-pulse [animation-duration:2.4s]",
+  sad: "animate-shake",
 };
 
 const SIZE: Record<"sm" | "md" | "lg", string> = {
@@ -82,7 +116,6 @@ export default function GohankunWidget({
 }) {
   const preset = PRESET[state];
   const [idx, setIdx] = useState(0);
-  const [bounce, setBounce] = useState(false);
   // 画像の有無を事前読み込みで判定（SSRのonError取りこぼしを回避）。
   // 確認できるまで・無い場合はSVGフォールバックを表示。
   const [imgOk, setImgOk] = useState(false);
@@ -101,18 +134,10 @@ export default function GohankunWidget({
     };
   }, [state, preset.img]);
 
-  // タップで弾むアニメーション（一定時間後に解除）
-  useEffect(() => {
-    if (!bounce) return;
-    const t = setTimeout(() => setBounce(false), 900);
-    return () => clearTimeout(t);
-  }, [bounce]);
-
   const text = message ?? preset.lines[idx];
 
+  // タップ：セリフを巡回（押した感触は active:scale-95 で表現）
   const onTap = () => {
-    setBounce(true);
-    // 固定メッセージ指定が無いときはセリフを巡回
     if (!message) setIdx((i) => (i + 1) % preset.lines.length);
   };
 
@@ -121,8 +146,8 @@ export default function GohankunWidget({
       type="button"
       onClick={onTap}
       aria-label="ごはんくん"
-      className={`${SIZE[size]} shrink-0 origin-bottom select-none transition-transform duration-200 hover:scale-105 active:scale-95 ${
-        bounce ? "animate-bounce" : IDLE[state] ?? "animate-pop"
+      className={`${SIZE[size]} shrink-0 origin-bottom select-none transition-transform duration-100 hover:scale-105 active:scale-95 ${
+        IDLE[state] ?? "animate-pop"
       }`}
     >
       {imgOk ? (

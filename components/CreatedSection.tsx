@@ -62,8 +62,8 @@ export default function CreatedSection() {
   if (recent.length === 0) {
     return (
       <div className="rounded-3xl bg-cream/70 p-8 text-center shadow-soft ring-1 ring-ink/[0.04]">
-        <div className="mb-3 flex justify-center">
-          <GohankunWidget state="sad" size="md" bubble={false} />
+        <div className="mb-4 flex justify-center">
+          <GohankunWidget state="warning" size="md" bubblePosition="top" />
         </div>
         <p className="text-[13px] text-ink/50">直近1週間の記録はまだありません</p>
         {hasOlder && (
