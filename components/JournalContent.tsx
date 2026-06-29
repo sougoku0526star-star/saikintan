@@ -13,6 +13,7 @@ import {
   Plus,
   Info,
   Pencil,
+  Images,
 } from "lucide-react";
 import type { MealEntry } from "@/lib/mock-data";
 import type { SharedRecord } from "@/lib/friends";
@@ -183,6 +184,24 @@ export default function JournalContent({
         </p>
         <p className="mt-3 text-right text-[11px] text-ink/35">{dateLabel}</p>
       </div>
+
+      {/* 思い出の写真（任意・友人や風景など） */}
+      {meal.memoryPhoto && (
+        <div className="mt-5 animate-fade-up">
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-sage">
+            <Images className="h-3.5 w-3.5" />
+            この日の思い出
+          </div>
+          <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-card ring-1 ring-black/[0.04]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={meal.memoryPhoto}
+              alt="この日の思い出の写真"
+              className="w-full rounded-xl object-cover"
+            />
+          </div>
+        </div>
+      )}
 
       {/* データタグ（支出・栄養・位置） */}
       <div className="mt-5 flex flex-wrap gap-2">

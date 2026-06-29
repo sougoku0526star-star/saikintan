@@ -31,6 +31,11 @@ export async function POST(req: Request) {
     const url = saveDataUrl(uid, meal.photo);
     if (url) meal.photo = url;
   }
+  // 思い出写真（任意・AI解析対象外）も同様にオブジェクトストアへ
+  if (meal.memoryPhoto?.startsWith("data:")) {
+    const url = saveDataUrl(uid, meal.memoryPhoto);
+    if (url) meal.memoryPhoto = url;
+  }
   const record = upsertRecord(uid, {
     id: body.id || randomUUID(),
     meal,

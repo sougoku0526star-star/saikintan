@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Utensils,
   ImagePlus,
+  Images,
   Trash2,
   MapPin,
 } from "lucide-react";
@@ -63,8 +64,10 @@ export default function MealEditForm({
   onDelete?: () => void;
 }) {
   const [photo, setPhoto] = useState(meal.photo);
+  const [memoryPhoto, setMemoryPhoto] = useState<string | undefined>(meal.memoryPhoto);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const memoryFileRef = useRef<HTMLInputElement>(null);
   const [dishNameJa, setDishNameJa] = useState(meal.dishNameJa);
   const [date, setDate] = useState(meal.date);
   const [mealType, setMealType] = useState(
@@ -91,6 +94,7 @@ export default function MealEditForm({
     return {
       ...meal,
       photo,
+      memoryPhoto: memoryPhoto || undefined,
       dishNameJa: dishNameJa.trim() || meal.dishNameJa,
       date,
       timeLabel: mealType,
@@ -117,6 +121,15 @@ export default function MealEditForm({
     // HEIC→JPEG変換＋リサイズしてから保持（dataURLなので再読込でも残る）
     const { dataUrl } = await prepareImage(file);
     setPhoto(dataUrl);
+  };
+
+  // 思い出写真（任意・AI解析しない）。1枚のみ。
+  const onPickMemory = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const { dataUrl } = await prepareImage(file);
+    setMemoryPhoto(dataUrl);
   };
 
   return (
@@ -310,6 +323,51 @@ export default function MealEditForm({
           rows={4}
           className="w-full resize-none rounded-lg border border-black/10 bg-white px-3 py-2 font-serif text-[14px] leading-relaxed text-ink focus:border-clay focus:outline-none"
         />
+      </div>
+
+      {/* 思い出写真（任意・AI解析しない・1枚） */}
+      <div className="mt-4">
+        <label className="mb-1.5 flex items-center gap-1.5 text-[11px] text-ink/50">
+          <Images className="h-3.5 w-3.5" />
+          思い出の写真（任意・友人や風景など。解析はしません）
+        </label>
+        <input
+          ref={memoryFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPickMemory}
+        />
+        {memoryPhoto ? (
+          <div className="relative overflow-hidden rounded-xl ring-1 ring-black/[0.06]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={memoryPhoto} alt="思い出の写真" className="max-h-56 w-full object-cover" />
+            <div className="absolute right-2 top-2 flex gap-1.5">
+              <button
+                onClick={() => memoryFileRef.current?.click()}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-cream backdrop-blur active:scale-90"
+                aria-label="思い出写真を変更"
+              >
+                <ImagePlus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setMemoryPhoto(undefined)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-cream backdrop-blur active:scale-90"
+                aria-label="思い出写真を削除"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => memoryFileRef.current?.click()}
+            className="flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-black/15 bg-white/60 py-6 text-ink/45 transition hover:border-clay hover:text-clay"
+          >
+            <Images className="h-6 w-6" />
+            <span className="text-[12px]">タップして1枚追加</span>
+          </button>
+        )}
       </div>
 
       {/* アクション */}

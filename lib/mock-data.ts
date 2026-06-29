@@ -30,6 +30,8 @@ export interface MealEntry {
   /** AIが生成したエモい日記風キャプション */
   caption: string;
   photo: string;
+  /** 任意の思い出写真（友人・風景など）。AI解析対象外の純粋なログ。1枚のみ。 */
+  memoryPhoto?: string;
   location: string;
   /** 地図表示用の座標（あれば） */
   coords?: { lat: number; lng: number };
