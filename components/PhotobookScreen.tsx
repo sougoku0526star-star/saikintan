@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Download } from "lucide-react";
+import { BookOpen, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchRecords, ALBUM_UPDATED, type CreatedEntry } from "@/lib/created-store";
 import { fetchMe, AUTH_UPDATED, type AuthUser } from "@/lib/auth";
 import {
@@ -60,6 +60,16 @@ export default function PhotobookScreen() {
     [records, start, end, nick]
   );
 
+  // ブックのページ送り（0=表紙, 1..N=見開き）
+  const totalViews = spreads.length + 1;
+  const [view, setView] = useState(0);
+  const [dir, setDir] = useState<1 | -1>(1);
+  useEffect(() => setView(0), [start, end]);
+  const go = (delta: 1 | -1) => {
+    setDir(delta);
+    setView((v) => Math.min(totalViews - 1, Math.max(0, v + delta)));
+  };
+
   const download = () => {
     const html = buildPrintHtml({ title, periodLabel, photoCount, dayCount, spreads });
     const w = window.open("", "_blank");
@@ -76,9 +86,7 @@ export default function PhotobookScreen() {
       <header>
         <p className="text-[12px] tracking-[0.3em] text-clay">PHOTO BOOK</p>
         <h1 className="font-serif text-3xl font-semibold text-ink">フォトブック</h1>
-        <p className="mt-1 text-[12px] text-ink/50">
-          食事と思い出を、1冊の旅日記に。
-        </p>
+        <p className="mt-1 text-[12px] text-ink/50">食事と思い出を、1冊の旅日記に。</p>
       </header>
 
       {/* 期間選択 */}
@@ -123,18 +131,13 @@ export default function PhotobookScreen() {
         )}
       </div>
 
-      {/* プレビュー */}
       {photoCount === 0 ? (
         <div className="mt-8 rounded-3xl bg-cream/70 p-8 text-center shadow-soft ring-1 ring-ink/[0.04]">
           <div className="mb-3 flex justify-center">
             <GohankunWidget state="warning" size="md" bubble={false} />
           </div>
-          <p className="text-[13px] text-ink/55">
-            この期間の写真はまだないみたい…
-          </p>
-          <p className="mt-1 text-[11px] text-ink/40">
-            期間を変えるか、ごはんの記録を増やしてみよう。
-          </p>
+          <p className="text-[13px] text-ink/55">この期間の写真はまだないみたい…</p>
+          <p className="mt-1 text-[11px] text-ink/40">期間を変えるか、ごはんの記録を増やしてみよう。</p>
         </div>
       ) : (
         <>
@@ -144,15 +147,42 @@ export default function PhotobookScreen() {
             </p>
             <span className="flex items-center gap-1 text-[11px] text-ink/40">
               <BookOpen className="h-3.5 w-3.5" />
-              {spreads.length + 1}ページ
+              {view + 1} / {totalViews}
             </span>
           </div>
 
-          {/* 本のプレビュー（スクエア） */}
-          <div className="mt-3 space-y-5">
-            <Cover title={title} periodLabel={periodLabel} photoCount={photoCount} />
-            {spreads.map((s, i) => (
-              <SpreadCard key={i} spread={s} />
+          {/* 本の見開きビューア */}
+          <div className="relative mt-3">
+            {/* ページ本体 */}
+            <div className="overflow-hidden rounded-[14px] shadow-[0_18px_40px_-16px_rgba(61,49,42,0.45)] ring-1 ring-ink/[0.06]">
+              <div key={view} className={dir === 1 ? "animate-book-next" : "animate-book-prev"}>
+                {view === 0 ? (
+                  <CoverSpread title={title} periodLabel={periodLabel} photoCount={photoCount} />
+                ) : (
+                  <ContentSpread spread={spreads[view - 1]} />
+                )}
+              </div>
+            </div>
+
+            {/* ナビ（左右） */}
+            <NavBtn side="left" disabled={view === 0} onClick={() => go(-1)} />
+            <NavBtn side="right" disabled={view === totalViews - 1} onClick={() => go(1)} />
+          </div>
+
+          {/* ページインジケータ */}
+          <div className="mt-3 flex justify-center gap-1.5">
+            {Array.from({ length: totalViews }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setDir(i >= view ? 1 : -1);
+                  setView(i);
+                }}
+                aria-label={`${i + 1}ページへ`}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === view ? "w-5 bg-clay" : "w-1.5 bg-ink/15"
+                }`}
+              />
             ))}
           </div>
 
@@ -162,10 +192,10 @@ export default function PhotobookScreen() {
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-clay py-3.5 text-[14px] font-medium text-cream shadow-card transition active:scale-[0.98]"
           >
             <Download className="h-4 w-4" />
-            PDFにする（印刷 → PDFで保存）
+            PDFをダウンロード
           </button>
           <p className="mt-2 text-center text-[10px] text-ink/35">
-            印刷ダイアログで「PDFに保存」を選ぶと1冊のPDFになります。
+            印刷ダイアログで「PDFに保存」を選ぶと、正方形ページが連続した1冊のPDFになります。
           </p>
         </>
       )}
@@ -175,7 +205,32 @@ export default function PhotobookScreen() {
   );
 }
 
-function Cover({
+// 左右のページめくりボタン（本の外端に配置）
+function NavBtn({
+  side,
+  disabled,
+  onClick,
+}: {
+  side: "left" | "right";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={side === "left" ? "前へ" : "次へ"}
+      className={`absolute top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-cream text-ink/70 shadow-card ring-1 ring-ink/10 transition active:scale-90 disabled:opacity-0 ${
+        side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"
+      }`}
+    >
+      {side === "left" ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+    </button>
+  );
+}
+
+// 表紙（見開き全面）
+function CoverSpread({
   title,
   periodLabel,
   photoCount,
@@ -185,69 +240,87 @@ function Cover({
   photoCount: number;
 }) {
   return (
-    <div className="relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-cream to-paper p-7 text-center shadow-card ring-1 ring-ink/[0.05]">
-      <span className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-clay/5" />
-      <span className="pointer-events-none absolute -bottom-10 -left-6 h-32 w-32 rounded-full bg-sage/5" />
-      <GohankunWidget state="proud" size="lg" bubble={false} />
-      <p className="mt-3 text-[11px] tracking-[0.3em] text-clay/80">SINGAPORE DIARY</p>
-      <h2 className="mt-2 font-serif text-[20px] font-semibold leading-snug text-ink">
+    <div className="relative flex aspect-[2/1] w-full flex-col items-center justify-center bg-gradient-to-br from-cream to-paper p-5 text-center">
+      <span className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-clay/5" />
+      <span className="pointer-events-none absolute -bottom-8 -left-4 h-28 w-28 rounded-full bg-sage/5" />
+      <GohankunWidget state="proud" size="md" bubble={false} />
+      <p className="mt-2 text-[10px] tracking-[0.3em] text-clay/80">SINGAPORE DIARY</p>
+      <h2 className="mt-1.5 max-w-[88%] font-serif text-[16px] font-semibold leading-snug text-ink">
         『{title}』
       </h2>
-      <p className="mt-3 rounded-full bg-white/70 px-4 py-1 font-serif text-[13px] text-ink/70">
+      <p className="mt-2 rounded-full bg-white/70 px-3 py-0.5 font-serif text-[12px] text-ink/70">
         {periodLabel}
       </p>
-      <p className="mt-3 text-[11px] text-ink/45">{photoCount}枚のごはんと思い出</p>
+      <p className="mt-1.5 text-[10px] text-ink/45">{photoCount}枚のごはんと思い出</p>
     </div>
   );
 }
 
-function SpreadCard({ spread }: { spread: Spread }) {
+// 中身の見開き（左ページ＋右ページ）
+function ContentSpread({ spread }: { spread: Spread }) {
+  const n = spread.photos.length;
+  // 右ページは「写真1枚＋コメント」、残りは左ページへ（左は最大3枚）
+  const leftPhotos = n === 1 ? spread.photos : spread.photos.slice(0, n - 1);
+  const rightPhotos = n === 1 ? [] : spread.photos.slice(n - 1);
+
   return (
-    <div className="flex aspect-square flex-col overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-ink/[0.05]">
-      <div className="flex items-center justify-between px-4 pt-3">
-        <span className="font-serif text-[12px] text-ink/55">{spread.dateLabel}</span>
-        <span className="text-[10px] tracking-widest text-clay/60">MEMORY</span>
-      </div>
-      {/* 写真グリッド */}
-      <div className="min-h-0 flex-1 px-3 py-2">
-        <PhotoGrid photos={spread.photos} />
-      </div>
-      {/* ごはんくんのまとめコメント */}
-      <div className="flex items-end gap-2 px-3 pb-3">
-        <GohankunWidget state={spread.mascot} size="sm" bubble={false} />
-        <div className="flex-1 rounded-2xl rounded-bl-md bg-cream px-3 py-2 text-[11px] leading-relaxed text-ink/80 ring-1 ring-ink/[0.05]">
-          {spread.comment}
+    <div className="relative flex aspect-[2/1] w-full bg-paper">
+      {/* 左ページ */}
+      <div className="relative flex w-1/2 flex-col p-3">
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-cream/90 px-2 py-0.5 font-serif text-[9px] text-ink/55 shadow-soft">
+          {spread.dateLabel}
+        </span>
+        <div className="min-h-0 flex-1 pt-5">
+          <PageGrid photos={leftPhotos} />
         </div>
       </div>
+
+      {/* 右ページ */}
+      <div className="flex w-1/2 flex-col p-3">
+        {rightPhotos.length > 0 && (
+          <div className="min-h-0 flex-[3]">
+            <PageGrid photos={rightPhotos} />
+          </div>
+        )}
+        {/* ごはんくんのまとめコメント（右下の余白に必ず収める） */}
+        <div
+          className={`flex items-end gap-1.5 ${
+            rightPhotos.length > 0 ? "flex-[2] pt-2" : "flex-1 items-center"
+          }`}
+        >
+          <GohankunWidget state={spread.mascot} size="sm" bubble={false} />
+          <div className="flex-1 rounded-2xl rounded-bl-md bg-cream px-2.5 py-1.5 text-[9px] leading-relaxed text-ink/80 ring-1 ring-ink/[0.06]">
+            {spread.comment}
+          </div>
+        </div>
+      </div>
+
+      {/* 中央の綴じ目シャドウ */}
+      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-ink/15 to-transparent" />
+      {/* 外端の紙重なり影 */}
+      <div className="pointer-events-none absolute inset-y-1.5 left-0 w-2 bg-gradient-to-r from-ink/10 to-transparent" />
+      <div className="pointer-events-none absolute inset-y-1.5 right-0 w-2 bg-gradient-to-l from-ink/10 to-transparent" />
     </div>
   );
 }
 
-// 枚数に応じたスクラップブック風グリッド
-function PhotoGrid({ photos }: { photos: BookPhoto[] }) {
+// 1ページ内の写真グリッド（1〜3枚）。角丸スクラップブック風。
+function PageGrid({ photos }: { photos: BookPhoto[] }) {
   const n = photos.length;
-  const img = (p: BookPhoto, extra = "") => (
-    <div
-      key={p.src}
-      className={`overflow-hidden rounded-2xl bg-ink/5 ring-1 ring-ink/[0.05] ${extra}`}
-    >
+  if (n === 0) return null;
+  const cell = (p: BookPhoto, extra = "") => (
+    <div key={p.src} className={`overflow-hidden rounded-2xl bg-ink/5 ring-1 ring-ink/[0.06] ${extra}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={p.src} alt={p.label} className="h-full w-full object-cover" />
     </div>
   );
-
-  if (n === 1) return <div className="h-full">{img(photos[0])}</div>;
-  if (n === 2)
-    return <div className="grid h-full grid-cols-2 gap-2">{photos.map((p) => img(p))}</div>;
-  if (n === 3)
-    return (
-      <div className="grid h-full grid-cols-2 grid-rows-2 gap-2">
-        {img(photos[0], "col-span-2")}
-        {img(photos[1])}
-        {img(photos[2])}
-      </div>
-    );
+  if (n === 1) return <div className="h-full">{cell(photos[0])}</div>;
+  if (n === 2) return <div className="grid h-full grid-rows-2 gap-1.5">{photos.map((p) => cell(p))}</div>;
   return (
-    <div className="grid h-full grid-cols-2 grid-rows-2 gap-2">{photos.map((p) => img(p))}</div>
+    <div className="grid h-full grid-cols-2 grid-rows-2 gap-1.5">
+      {cell(photos[0], "col-span-2")}
+      {cell(photos[1])}
+      {cell(photos[2])}
+    </div>
   );
 }

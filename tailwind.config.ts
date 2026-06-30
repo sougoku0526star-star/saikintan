@@ -69,6 +69,15 @@ const config: Config = {
           "60%": { transform: "translateX(-2px) rotate(-1.5deg)" },
           "80%": { transform: "translateX(2px) rotate(1.5deg)" },
         },
+        // フォトブックのページめくり（左右にふわっとスライド）
+        "book-next": {
+          "0%": { opacity: "0", transform: "translateX(7%)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        "book-prev": {
+          "0%": { opacity: "0", transform: "translateX(-7%)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.6s ease-out both",
@@ -78,6 +87,8 @@ const config: Config = {
         twinkle: "twinkle 1.4s ease-in-out infinite",
         sway: "sway 2.2s ease-in-out infinite",
         shake: "shake 0.8s ease-in-out infinite",
+        "book-next": "book-next 0.35s cubic-bezier(0.22,1,0.36,1) both",
+        "book-prev": "book-prev 0.35s cubic-bezier(0.22,1,0.36,1) both",
       },
     },
   },

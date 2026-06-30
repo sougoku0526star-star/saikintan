@@ -14,7 +14,8 @@
       "Bash(python3 -c \"import sys; d=sys.stdin.read\\(\\); print\\(d[:240]\\)\")",
       "Bash(npx tsc *)",
       "Bash(echo \"tsc exit: $?\")",
-      "Bash(node -e \"console.log\\('react-map-gl', require\\('./node_modules/react-map-gl/package.json'\\).version\\); console.log\\('mapbox-gl', require\\('./node_modules/mapbox-gl/package.json'\\).version\\)\")"
+      "Bash(node -e \"console.log\\('react-map-gl', require\\('./node_modules/react-map-gl/package.json'\\).version\\); console.log\\('mapbox-gl', require\\('./node_modules/mapbox-gl/package.json'\\).version\\)\")",
+      "Bash(git switch *)"
     ]
   }
 }
