@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { BookOpen, Download, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { fetchRecords, ALBUM_UPDATED, type CreatedEntry } from "@/lib/created-store";
 import { fetchMe, AUTH_UPDATED, type AuthUser } from "@/lib/auth";
 import {
@@ -157,7 +157,12 @@ export default function PhotobookScreen() {
             <div className="overflow-hidden rounded-[14px] shadow-[0_18px_40px_-16px_rgba(61,49,42,0.45)] ring-1 ring-ink/[0.06]">
               <div key={view} className={dir === 1 ? "animate-book-next" : "animate-book-prev"}>
                 {view === 0 ? (
-                  <CoverSpread title={title} periodLabel={periodLabel} photoCount={photoCount} />
+                  <CoverSpread
+                    title={title}
+                    periodLabel={periodLabel}
+                    photoCount={photoCount}
+                    coverPhoto={spreads[0]?.photos[0]?.src}
+                  />
                 ) : (
                   <ContentSpread spread={spreads[view - 1]} />
                 )}
@@ -229,74 +234,14 @@ function NavBtn({
   );
 }
 
-// 表紙（見開き全面）
-function CoverSpread({
-  title,
-  periodLabel,
-  photoCount,
-}: {
-  title: string;
-  periodLabel: string;
-  photoCount: number;
-}) {
-  return (
-    <div className="relative flex aspect-[2/1] w-full flex-col items-center justify-center bg-gradient-to-br from-cream to-paper p-5 text-center">
-      <span className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-clay/5" />
-      <span className="pointer-events-none absolute -bottom-8 -left-4 h-28 w-28 rounded-full bg-sage/5" />
-      <GohankunWidget state="proud" size="md" bubble={false} />
-      <p className="mt-2 text-[10px] tracking-[0.3em] text-clay/80">SINGAPORE DIARY</p>
-      <h2 className="mt-1.5 max-w-[88%] font-serif text-[16px] font-semibold leading-snug text-ink">
-        『{title}』
-      </h2>
-      <p className="mt-2 rounded-full bg-white/70 px-3 py-0.5 font-serif text-[12px] text-ink/70">
-        {periodLabel}
-      </p>
-      <p className="mt-1.5 text-[10px] text-ink/45">{photoCount}枚のごはんと思い出</p>
-    </div>
-  );
-}
-
-// 中身の見開き（左ページ＋右ページ）
-function ContentSpread({ spread }: { spread: Spread }) {
-  const n = spread.photos.length;
-  // 右ページは「写真1枚＋コメント」、残りは左ページへ（左は最大3枚）
-  const leftPhotos = n === 1 ? spread.photos : spread.photos.slice(0, n - 1);
-  const rightPhotos = n === 1 ? [] : spread.photos.slice(n - 1);
-
+// 見開きの外枠（左右2ページ＋綴じ目＋端の影）。中身はページ単位で流し込む。
+function SpreadFrame({ left, right }: { left: ReactNode; right: ReactNode }) {
   return (
     <div className="relative flex aspect-[2/1] w-full bg-paper">
-      {/* 左ページ */}
-      <div className="relative flex w-1/2 flex-col p-3">
-        <span className="absolute left-3 top-3 z-10 rounded-full bg-cream/90 px-2 py-0.5 font-serif text-[9px] text-ink/55 shadow-soft">
-          {spread.dateLabel}
-        </span>
-        <div className="min-h-0 flex-1 pt-5">
-          <PageGrid photos={leftPhotos} />
-        </div>
-      </div>
-
-      {/* 右ページ */}
-      <div className="flex w-1/2 flex-col p-3">
-        {rightPhotos.length > 0 && (
-          <div className="min-h-0 flex-[3]">
-            <PageGrid photos={rightPhotos} />
-          </div>
-        )}
-        {/* ごはんくんのまとめコメント（右下の余白に必ず収める） */}
-        <div
-          className={`flex items-end gap-1.5 ${
-            rightPhotos.length > 0 ? "flex-[2] pt-2" : "flex-1 items-center"
-          }`}
-        >
-          <GohankunWidget state={spread.mascot} size="sm" bubble={false} />
-          <div className="flex-1 rounded-2xl rounded-bl-md bg-cream px-2.5 py-1.5 text-[9px] leading-relaxed text-ink/80 ring-1 ring-ink/[0.06]">
-            {spread.comment}
-          </div>
-        </div>
-      </div>
-
+      <div className="relative w-1/2 overflow-hidden">{left}</div>
+      <div className="relative w-1/2 overflow-hidden">{right}</div>
       {/* 中央の綴じ目シャドウ */}
-      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-ink/15 to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 left-1/2 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-ink/12 to-transparent" />
       {/* 外端の紙重なり影 */}
       <div className="pointer-events-none absolute inset-y-1.5 left-0 w-2 bg-gradient-to-r from-ink/10 to-transparent" />
       <div className="pointer-events-none absolute inset-y-1.5 right-0 w-2 bg-gradient-to-l from-ink/10 to-transparent" />
@@ -304,23 +249,187 @@ function ContentSpread({ spread }: { spread: Spread }) {
   );
 }
 
-// 1ページ内の写真グリッド（1〜3枚）。角丸スクラップブック風。
-function PageGrid({ photos }: { photos: BookPhoto[] }) {
-  const n = photos.length;
-  if (n === 0) return null;
-  const cell = (p: BookPhoto, extra = "") => (
-    <div key={p.src} className={`overflow-hidden rounded-2xl bg-ink/5 ring-1 ring-ink/[0.06] ${extra}`}>
+// 編集キャプション（英字の日付＋場所）。海外雑誌風の細く洗練された表記。
+function EditorialCaption({
+  dateISO,
+  location,
+  light = false,
+  className = "",
+}: {
+  dateISO: string;
+  location?: string;
+  light?: boolean;
+  className?: string;
+}) {
+  const d = new Date(dateISO);
+  const en = d
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    .toUpperCase();
+  const place = location ? location.split("·")[0].trim() : "";
+  return (
+    <div className={className}>
+      <p className={`font-serif text-[9px] tracking-[0.28em] ${light ? "text-white/90" : "text-ink/45"}`}>
+        {en}
+      </p>
+      {place && (
+        <p
+          className={`mt-0.5 flex items-center gap-0.5 text-[8.5px] tracking-wide ${
+            light ? "text-white/75" : "text-ink/40"
+          }`}
+        >
+          <MapPin className="h-2.5 w-2.5 shrink-0" />
+          {place}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ごはんくん（名編集者）のワンポイント。1見開き1つだけ、余白にひょっこり。
+function EditorNote({
+  mascot,
+  comment,
+  className = "",
+}: {
+  mascot: Spread["mascot"];
+  comment: string;
+  className?: string;
+}) {
+  return (
+    <div className={`flex items-end gap-1.5 ${className}`}>
+      <GohankunWidget state={mascot} size="xs" bubble={false} />
+      <div className="rounded-xl rounded-bl-sm bg-cream/95 px-2 py-1 text-[8.5px] leading-relaxed text-ink/75 shadow-soft ring-1 ring-ink/[0.06]">
+        {comment}
+      </div>
+    </div>
+  );
+}
+
+function Photo({ p, className = "" }: { p: BookPhoto; className?: string }) {
+  return (
+    <div className={`overflow-hidden rounded-[4px] bg-ink/5 ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={p.src} alt={p.label} className="h-full w-full object-cover" />
     </div>
   );
-  if (n === 1) return <div className="h-full">{cell(photos[0])}</div>;
-  if (n === 2) return <div className="grid h-full grid-rows-2 gap-1.5">{photos.map((p) => cell(p))}</div>;
+}
+
+// 表紙：左ページ＝白地にタイトル、右ページ＝全面のヒーロー写真（海外雑誌風）。
+function CoverSpread({
+  title,
+  periodLabel,
+  photoCount,
+  coverPhoto,
+}: {
+  title: string;
+  periodLabel: string;
+  photoCount: number;
+  coverPhoto?: string;
+}) {
   return (
-    <div className="grid h-full grid-cols-2 grid-rows-2 gap-1.5">
-      {cell(photos[0], "col-span-2")}
-      {cell(photos[1])}
-      {cell(photos[2])}
-    </div>
+    <SpreadFrame
+      left={
+        <div className="flex h-full flex-col justify-between p-5">
+          <div>
+            <p className="font-serif text-[9px] tracking-[0.35em] text-clay/70">SINGAPORE DIARY</p>
+            <h2 className="mt-3 font-serif text-[15px] font-medium leading-relaxed text-ink">
+              『{title}』
+            </h2>
+            <p className="mt-2 font-serif text-[11px] tracking-[0.2em] text-ink/50">{periodLabel}</p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <GohankunWidget state="proud" size="xs" bubble={false} />
+            <p className="text-[8px] tracking-wide text-ink/40">
+              {photoCount} PHOTOS ・ 編集 ごはんくん
+            </p>
+          </div>
+        </div>
+      }
+      right={
+        coverPhoto ? (
+          <Photo p={{ src: coverPhoto, label: "cover", kind: "food" }} className="h-full w-full rounded-none" />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-cream">
+            <GohankunWidget state="sing" size="md" bubble={false} />
+          </div>
+        )
+      }
+    />
+  );
+}
+
+// 中身の見開き：枚数に応じて雑誌風テンプレートを選択。
+function ContentSpread({ spread }: { spread: Spread }) {
+  const n = spread.photos.length;
+  if (n >= 3) return <HeroGridSpread spread={spread} />;
+  if (n === 2) return <AirySpread spread={spread} />;
+  return <SoloSpread spread={spread} />;
+}
+
+// 1枚：右ページ全面のエモい写真 × 左ページの余白＋編集メモ。
+function SoloSpread({ spread }: { spread: Spread }) {
+  return (
+    <SpreadFrame
+      left={
+        <div className="flex h-full flex-col justify-between p-5">
+          <EditorialCaption dateISO={spread.dateISO} location={spread.location} />
+          <EditorNote mascot={spread.mascot} comment={spread.comment} />
+        </div>
+      }
+      right={<Photo p={spread.photos[0]} className="h-full w-full rounded-none" />}
+    />
+  );
+}
+
+// 2枚：大小のメリハリ。左＝大きめ、右＝小さくオフセット＋余白に編集メモ。
+function AirySpread({ spread }: { spread: Spread }) {
+  const [a, b] = spread.photos;
+  return (
+    <SpreadFrame
+      left={
+        <div className="flex h-full flex-col p-4">
+          <Photo p={a} className="min-h-0 flex-1" />
+          <EditorialCaption dateISO={spread.dateISO} location={spread.location} className="mt-2" />
+        </div>
+      }
+      right={
+        <div className="relative h-full p-4">
+          <Photo p={b} className="ml-auto h-[56%] w-[78%]" />
+          <EditorNote mascot={spread.mascot} comment={spread.comment} className="absolute inset-x-4 bottom-4" />
+        </div>
+      }
+    />
+  );
+}
+
+// 3〜4枚：左ページ全面のヒーロー × 右ページに小さくグリッド＋編集メモ。
+function HeroGridSpread({ spread }: { spread: Spread }) {
+  const [hero, ...rest] = spread.photos; // rest: 2〜3枚
+  const three = rest.length === 3;
+  return (
+    <SpreadFrame
+      left={
+        <div className="relative h-full">
+          <Photo p={hero} className="h-full w-full rounded-none" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/30 to-transparent" />
+          <EditorialCaption
+            dateISO={spread.dateISO}
+            location={spread.location}
+            light
+            className="absolute bottom-3 left-3"
+          />
+        </div>
+      }
+      right={
+        <div className="flex h-full flex-col p-4">
+          <div className={`grid min-h-0 flex-1 gap-2 ${three ? "grid-cols-2 grid-rows-2" : "grid-rows-2"}`}>
+            {rest.map((p, i) => (
+              <Photo key={p.src} p={p} className={three && i === 0 ? "col-span-2" : ""} />
+            ))}
+          </div>
+          <EditorNote mascot={spread.mascot} comment={spread.comment} className="mt-2" />
+        </div>
+      }
+    />
   );
 }

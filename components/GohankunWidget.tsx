@@ -92,7 +92,8 @@ const IDLE: Partial<Record<GohankunState, string>> = {
   sad: "animate-shake",
 };
 
-const SIZE: Record<"sm" | "md" | "lg", string> = {
+const SIZE: Record<"xs" | "sm" | "md" | "lg", string> = {
+  xs: "h-10 w-10",
   sm: "h-14 w-14",
   md: "h-20 w-20",
   lg: "h-28 w-28",
@@ -109,7 +110,7 @@ export default function GohankunWidget({
   state?: GohankunState;
   /** セリフを固定したいとき（省略時は状態の既定セリフ＋タップで巡回） */
   message?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   bubble?: boolean;
   bubblePosition?: "right" | "left" | "top";
   className?: string;

@@ -11,6 +11,7 @@ export interface BookPhoto {
 export interface Spread {
   dateISO: string;
   dateLabel: string;
+  location: string; // その日の代表的な場所（編集キャプション用）
   photos: BookPhoto[]; // 1〜4枚
   comment: string; // ごはんくんのまとめコメント（1〜2行）
   mascot: GohankunState;
@@ -35,7 +36,8 @@ export function formatPeriodLabel(start: string, end: string): string {
 
 const MASCOTS: GohankunState[] = ["sing", "eating", "proud", "happy"];
 
-// ごはんくん口調の「1日まとめコメント」（生成済みログ＝料理名から組み立て）。
+// ごはんくん（名編集者）の「1日まとめコメント」。
+// 回顧的でポエジー、海外生活のその日の空気感を優しく振り返る1〜2行。
 function daySummary(
   dateISO: string,
   dishes: string[],
@@ -43,18 +45,15 @@ function daySummary(
   nick: string
 ): string {
   const d = new Date(dateISO);
-  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
   const dish = dishes[0] ?? "ごはん";
-  const many = dishes.length >= 2;
   const patterns = [
-    `${nick}、${md}は${dish}を楽しんだね！こういう一日、僕は大すきだよ。`,
-    `${md}の${dish}、おいしそうだったなー。${nick}、また一緒に食べ歩こ！`,
-    `がんばった一日のごほうびに${dish}だね。${nick}、えらいぞ〜！`,
-    `${nick}、${md}も しっかり食べてて安心したよ。${dish}、いい選択だね！`,
+    `あの日の${dish}、まだ舌が覚えてるよ。異国の一日も、こうしてそっと宝物になるね。`,
+    `遠い街の空の下で食べた${dish}。${nick}、あの時間はちゃんと、きみの一部だよ。`,
+    `湯気の向こうに、がんばる${nick}がいたね。${dish}、しみたなあ…。`,
+    `ことばの壁も、おいしさはひょいと越えていく。${dish}の日の${nick}、すきだったな。`,
   ];
   let line = patterns[d.getDate() % patterns.length];
-  if (many) line = line.replace("を楽しんだね", `たちを楽しんだね`);
-  if (hasMemory) line += " 写真からあったかい空気が伝わってくるよ。";
+  if (hasMemory) line += " 写真の余白から、あの日の空気まで香ってくるよ。";
   return line;
 }
 
@@ -80,6 +79,7 @@ export function buildSpreads(
 
   for (const day of days) {
     const entries = byDay.get(day)!.sort((a, b) => a.createdAt - b.createdAt);
+    const location = entries[0]?.meal.location ?? "";
     const photos: BookPhoto[] = [];
     const dishes: string[] = [];
     let hasMemory = false;
@@ -110,6 +110,7 @@ export function buildSpreads(
       spreads.push({
         dateISO: day,
         dateLabel,
+        location,
         photos: photos.slice(i, i + 4),
         comment,
         mascot: MASCOTS[spreadIndex % MASCOTS.length],
