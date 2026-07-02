@@ -11,14 +11,19 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [devUrl, setDevUrl] = useState<string | null>(null);
 
   const submit = async () => {
-    setBusy(true);
     setError("");
+    if (mode === "signup" && password !== password2) {
+      setError("パスワードが一致しません");
+      return;
+    }
+    setBusy(true);
     if (mode === "signup") {
       const res = await signup(email, password);
       setBusy(false);
@@ -32,6 +37,13 @@ export default function AuthScreen() {
     if (res.error) return setError(res.error);
     router.push("/settings");
   };
+
+  // 確認欄が入力済みで不一致のときだけ警告を出す
+  const mismatch = mode === "signup" && password2.length > 0 && password !== password2;
+  const canSubmit =
+    !!email &&
+    password.length >= 6 &&
+    (mode === "login" || password === password2);
 
   // サインアップ後：確認メール送信の案内
   if (sentTo) {
@@ -119,13 +131,35 @@ export default function AuthScreen() {
           />
         </div>
 
+        {mode === "signup" && (
+          <div>
+            <div
+              className={`flex items-center rounded-xl border bg-white px-3 focus-within:border-clay ${
+                mismatch ? "border-clay/60" : "border-black/10"
+              }`}
+            >
+              <Lock className="h-4 w-4 text-ink/40" />
+              <input
+                type="password"
+                placeholder="パスワード（確認のためもう一度）"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                className="w-full bg-transparent px-3 py-3 text-[15px] text-ink focus:outline-none"
+              />
+            </div>
+            {mismatch && (
+              <p className="mt-1 px-1 text-[11px] text-clay">パスワードが一致しません</p>
+            )}
+          </div>
+        )}
+
         {error && (
           <p className="rounded-lg bg-clay/10 px-3 py-2 text-[12px] text-clay">{error}</p>
         )}
 
         <button
           onClick={submit}
-          disabled={busy || !email || password.length < 6}
+          disabled={busy || !canSubmit}
           className="w-full rounded-2xl bg-clay py-3.5 text-[14px] font-medium text-cream shadow-card transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "処理中…" : mode === "signup" ? "登録して同期を始める" : "ログイン"}
@@ -145,6 +179,7 @@ export default function AuthScreen() {
         onClick={() => {
           setMode((m) => (m === "signup" ? "login" : "signup"));
           setError("");
+          setPassword2("");
         }}
         className="mt-5 w-full text-center text-[12px] text-ink/50"
       >
