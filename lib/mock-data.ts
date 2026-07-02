@@ -1,6 +1,7 @@
 // MVP用のモックデータ。
 // 「写真を1枚アップロードするだけで、裏側でAIがこれらを生成した」という前提のダミー。
 // 本番ではこの構造のデータを画像解析APIから受け取る想定。
+import type { CurrencyCode } from "./currency";
 
 export type MacroLevel = "low" | "mid" | "high";
 
@@ -39,9 +40,9 @@ export interface MealEntry {
   date: string;
   timeLabel: string; // 表示用（例: 12:40 Lunch）
   spend: {
-    sgd: number;
-    jpy: number;
-    rate: number; // 1 SGD = ? JPY
+    amount: number; // 支払った金額（currency建て）
+    currency: CurrencyCode; // 支払い通貨
+    jpy: number; // 円換算（記録時のレートで確定・集計の基準）
   };
   macros: {
     protein: MacroLevel;
@@ -69,7 +70,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.2807, lng: 103.8443 },
     date: "2026-06-14",
     timeLabel: "12:40 · Lunch",
-    spend: { sgd: 5.5, jpy: 638, rate: 116 },
+    spend: { amount: 5.5, currency: "SGD", jpy: 638 },
     macros: { protein: "high", fat: "mid", carb: "high" },
     nutritionTags: [
       { label: "高タンパク", tone: "good" },
@@ -89,7 +90,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.3069, lng: 103.9039 },
     date: "2026-06-13",
     timeLabel: "18:20 · Dinner",
-    spend: { sgd: 6.8, jpy: 789, rate: 116 },
+    spend: { amount: 6.8, currency: "SGD", jpy: 789 },
     macros: { protein: "mid", fat: "high", carb: "high" },
     nutritionTags: [
       { label: "脂質 多め", tone: "watch" },
@@ -109,7 +110,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.2849, lng: 103.8480 },
     date: "2026-06-13",
     timeLabel: "08:10 · Breakfast",
-    spend: { sgd: 4.2, jpy: 487, rate: 116 },
+    spend: { amount: 4.2, currency: "SGD", jpy: 487 },
     macros: { protein: "mid", fat: "mid", carb: "high" },
     nutritionTags: [
       { label: "朝食向き", tone: "neutral" },
@@ -129,7 +130,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.2766, lng: 103.8456 },
     date: "2026-06-12",
     timeLabel: "13:05 · Lunch",
-    spend: { sgd: 13.9, jpy: 1612, rate: 116 },
+    spend: { amount: 13.9, currency: "SGD", jpy: 1612 },
     macros: { protein: "high", fat: "mid", carb: "mid" },
     nutritionTags: [
       { label: "高タンパク", tone: "good" },
@@ -149,7 +150,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.2895, lng: 103.8348 },
     date: "2026-06-11",
     timeLabel: "19:40 · Dinner",
-    spend: { sgd: 28.0, jpy: 3248, rate: 116 },
+    spend: { amount: 28.0, currency: "SGD", jpy: 3248 },
     macros: { protein: "high", fat: "high", carb: "mid" },
     nutritionTags: [
       { label: "高タンパク", tone: "good" },
@@ -169,7 +170,7 @@ export const meals: MealEntry[] = [
     coords: { lat: 1.3543, lng: 103.8320 },
     date: "2026-06-10",
     timeLabel: "22:15 · Late",
-    spend: { sgd: 3.6, jpy: 418, rate: 116 },
+    spend: { amount: 3.6, currency: "SGD", jpy: 418 },
     macros: { protein: "low", fat: "high", carb: "high" },
     nutritionTags: [
       { label: "夜遅め", tone: "watch" },
@@ -186,9 +187,7 @@ export function getMeal(id: string): MealEntry | undefined {
 // 今週のサマリー（ダッシュボード用のモック集計）
 export const weeklySummary = {
   weekLabel: "6月8日 – 6月14日",
-  totalSgd: meals.reduce((s, m) => s + m.spend.sgd, 0),
   totalJpy: meals.reduce((s, m) => s + m.spend.jpy, 0),
-  budgetSgd: 80,
   mealsCount: meals.length,
   // 栄養バランスのざっくり指数（0-100）
   balance: {

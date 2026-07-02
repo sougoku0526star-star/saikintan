@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSgdJpyRate } from "@/lib/server/fx-db";
+import { getRatesToJpy } from "@/lib/server/fx-db";
 
 export const runtime = "nodejs";
 
-// SGD→JPY の最新レート（サーバーで1日1回キャッシュ）
+// 各対応通貨→JPY の最新レート（サーバーで1日1回キャッシュ）
 export async function GET() {
-  const fx = await getSgdJpyRate();
+  const fx = await getRatesToJpy();
   return NextResponse.json(fx);
 }

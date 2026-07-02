@@ -1,7 +1,8 @@
 // 期間集計の純粋関数（週・月）。DB非依存・クライアント/サーバー共用。
+// 金額の集計基準は常にJPY（通貨が混在しても正しく合算できる）。
+// 表示用にメイン通貨換算値(totalMain/budgetMain)も持つ。
 import type { CreatedEntry } from "./created-store";
-
-export const WEEK_BUDGET_SGD = 80; // 既定の週予算（フォールバック）
+import { formatMoney, type CurrencyCode } from "./currency";
 
 export type PeriodKind = "week" | "month";
 
@@ -10,9 +11,10 @@ export interface PeriodStats {
   start: string; // 期間開始ISO（週=月曜 / 月=1日）
   label: string;
   mealsCount: number;
-  totalSgd: number;
-  totalJpy: number;
-  budgetSgd: number;
+  totalJpy: number; // 円換算の合計（集計の基準）
+  totalMain: number; // メイン通貨換算の合計（表示用）
+  mainCurrency: CurrencyCode;
+  budgetMain: number; // メイン通貨建ての予算
   budgetPct: number;
   calories: number;
   protein: number;
@@ -92,13 +94,14 @@ export function aggregatePeriod(
   records: CreatedEntry[],
   kind: PeriodKind,
   start: string,
-  budget: number
+  budgetMain: number,
+  mainCurrency: CurrencyCode,
+  rateMain: number // 1 メイン通貨 = ? JPY
 ): PeriodStats {
   const end = periodEnd(kind, start);
   const inP = records.filter((r) => r.meal.date >= start && r.meal.date <= end);
 
-  let totalSgd = 0,
-    totalJpy = 0,
+  let totalJpy = 0,
     calories = 0,
     protein = 0,
     fat = 0,
@@ -108,7 +111,6 @@ export function aggregatePeriod(
 
   for (const r of inP) {
     const m = r.meal;
-    totalSgd += m.spend.sgd || 0;
     totalJpy += m.spend.jpy || 0;
     if (m.nutrition) {
       calories += m.nutrition.calories || 0;
@@ -132,15 +134,18 @@ export function aggregatePeriod(
       }
     : { protein: 0, fat: 0, carb: 0 };
 
+  const totalMain = rateMain > 0 ? totalJpy / rateMain : 0;
+
   return {
     kind,
     start,
     label: periodLabel(kind, start),
     mealsCount: inP.length,
-    totalSgd: round1(totalSgd),
     totalJpy: Math.round(totalJpy),
-    budgetSgd: budget,
-    budgetPct: budget ? Math.round((totalSgd / budget) * 100) : 0,
+    totalMain: round1(totalMain),
+    mainCurrency,
+    budgetMain: budgetMain,
+    budgetPct: budgetMain ? Math.round((totalMain / budgetMain) * 100) : 0,
     calories: Math.round(calories),
     protein: round1(protein),
     fat: round1(fat),
@@ -160,7 +165,8 @@ export interface WeeklyLetter {
 /** AIキーが無い/失敗時の、集計値からの定型レター。 */
 export function fallbackLetter(s: PeriodStats): WeeklyLetter {
   const term = s.kind === "week" ? "今週" : "今月";
-  const within = s.totalSgd <= s.budgetSgd;
+  const within = s.totalMain <= s.budgetMain;
+  const money = `${formatMoney(s.totalMain, s.mainCurrency)}（約 ¥${s.totalJpy.toLocaleString()}）`;
   const dominant =
     s.pfcPct.carb >= s.pfcPct.fat && s.pfcPct.carb >= s.pfcPct.protein
       ? "炭水化物"
@@ -171,7 +177,7 @@ export function fallbackLetter(s: PeriodStats): WeeklyLetter {
   return {
     greeting: `${term}もおつかれさま！`,
     body: [
-      `${term}は${s.mealsCount}食を記録してくれたね。食費は S$${s.totalSgd.toFixed(1)}（約 ¥${s.totalJpy.toLocaleString()}）、予算 S$${s.budgetSgd} に対して ${s.budgetPct}% だよ。${
+      `${term}は${s.mealsCount}食を記録してくれたね。食費は ${money}、予算 ${formatMoney(s.budgetMain, s.mainCurrency)} に対して ${s.budgetPct}% だよ。${
         within ? "ちゃんと予算におさまってて、いいペース！僕もうれしいなー。" : "ちょっとだけ予算オーバーかな…無理しない範囲で配分を気にしてみよ？"
       }`,
       `1食あたり平均 ${avg} kcal。カロリー比だと${dominant}が中心の${term === "今週" ? "一週間" : "一か月"}だったみたい。${

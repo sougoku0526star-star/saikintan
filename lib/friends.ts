@@ -18,7 +18,7 @@ export interface SharedRecord {
   date: string;
   timeLabel: string;
   calories?: number;
-  spendSgd?: number;
+  spendLabel?: string; // 支払い額を通貨記号つきで整形済み（例: S$6.80）
   spendJpy?: number;
 }
 export interface ChatMessage {

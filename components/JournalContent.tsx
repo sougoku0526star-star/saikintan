@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { MealEntry } from "@/lib/mock-data";
 import type { SharedRecord } from "@/lib/friends";
+import { formatMoney } from "@/lib/currency";
 import { withPortions, macrosFromDetail, tagsForMeal } from "@/lib/nutrition-scale";
 import Badge from "./Badge";
 import MacroBar from "./MacroBar";
@@ -52,7 +53,7 @@ export default function JournalContent({
     date: meal.date,
     timeLabel: meal.timeLabel,
     calories: meal.nutrition?.calories,
-    spendSgd: meal.spend.sgd || undefined,
+    spendLabel: meal.spend.amount > 0 ? formatMoney(meal.spend.amount, meal.spend.currency) : undefined,
     spendJpy: meal.spend.jpy || undefined,
   };
 
@@ -205,9 +206,9 @@ export default function JournalContent({
 
       {/* データタグ（支出・栄養・位置） */}
       <div className="mt-5 flex flex-wrap gap-2">
-        {meal.spend.sgd > 0 ? (
+        {meal.spend.amount > 0 ? (
           <Badge tone="gold" icon={<Coins className="h-3.5 w-3.5" />}>
-            S${meal.spend.sgd.toFixed(2)}
+            {formatMoney(meal.spend.amount, meal.spend.currency)}
             <span className="text-gold/60">≈ ¥{meal.spend.jpy.toLocaleString()}</span>
           </Badge>
         ) : (
@@ -328,9 +329,13 @@ export default function JournalContent({
       </div>
 
       {/* 為替メモ */}
-      <p className="mt-4 text-center text-[11px] text-ink/35">
-        換算レート 1 SGD ≈ ¥{meal.spend.rate}（記録時）
-      </p>
+      {meal.spend.amount > 0 && (
+        <p className="mt-4 text-center text-[11px] text-ink/35">
+          換算レート 1 {meal.spend.currency} ≈ ¥
+          {(meal.spend.jpy / meal.spend.amount).toFixed(meal.spend.jpy / meal.spend.amount < 1 ? 3 : 1)}
+          （記録時）
+        </p>
+      )}
 
       <div className="h-6" />
     </div>

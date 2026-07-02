@@ -11,15 +11,22 @@ import {
   CloudOff,
   AtSign,
   Smile,
+  Coins,
   MailCheck,
   MailWarning,
 } from "lucide-react";
 import {
-  fetchMonthlyBudget,
+  fetchSettings,
   saveMonthlyBudget,
+  saveMainCurrency,
   weeklyFromMonthly,
-  DEFAULT_MONTHLY_BUDGET_SGD,
 } from "@/lib/settings";
+import {
+  CURRENCIES,
+  CURRENCY_CODES,
+  DEFAULT_CURRENCY,
+  type CurrencyCode,
+} from "@/lib/currency";
 import {
   fetchMe,
   logout,
@@ -40,17 +47,28 @@ export default function SettingsScreen() {
   const [nickDraft, setNickDraft] = useState("");
   const [nickMsg, setNickMsg] = useState<{ ok?: boolean; text: string } | null>(null);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [mainCurrency, setMainCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
+  const [currencySaved, setCurrencySaved] = useState(false);
 
   useEffect(() => {
     const loadBudget = () =>
-      fetchMonthlyBudget().then((m) => {
-        setDraft(String(m));
+      fetchSettings().then((s) => {
+        setDraft(String(s.monthlyBudget));
+        setMainCurrency(s.mainCurrency);
         setLoading(false);
       });
     loadBudget();
     window.addEventListener(AUTH_UPDATED, loadBudget);
     return () => window.removeEventListener(AUTH_UPDATED, loadBudget);
   }, []);
+
+  const changeCurrency = async (code: CurrencyCode) => {
+    setMainCurrency(code);
+    await saveMainCurrency(code);
+    setCurrencySaved(true);
+    setTimeout(() => setCurrencySaved(false), 1600);
+  };
+  const sym = CURRENCIES[mainCurrency].symbol;
 
   useEffect(() => {
     const loadMe = () =>
@@ -251,6 +269,50 @@ export default function SettingsScreen() {
         </div>
       </section>
 
+      {/* メイン通貨 */}
+      <section className="mt-7">
+        <div className="mb-2 flex items-center gap-2 text-[12px] text-ink/55">
+          <Coins className="h-4 w-4 text-gold" />
+          メイン通貨
+        </div>
+        <div className="rounded-2xl bg-white/70 p-5 shadow-card ring-1 ring-black/[0.04]">
+          <label className="mb-1.5 block text-[12px] text-ink/55">
+            ふだん使う通貨（予算・集計の基準）
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {CURRENCY_CODES.map((c) => {
+              const active = mainCurrency === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => changeCurrency(c)}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-[13px] transition ${
+                    active
+                      ? "border-clay bg-clay/10 text-ink"
+                      : "border-black/10 bg-white text-ink/70 hover:border-clay/40"
+                  }`}
+                >
+                  <span className="w-9 font-serif text-[14px] text-clay">{CURRENCIES[c].symbol}</span>
+                  <span className="min-w-0 truncate">
+                    {c}
+                    <span className="ml-1 text-[10px] text-ink/40">{CURRENCIES[c].label}</span>
+                  </span>
+                  {active && <Check className="ml-auto h-3.5 w-3.5 text-clay" />}
+                </button>
+              );
+            })}
+          </div>
+          {currencySaved && (
+            <p className="mt-2 flex items-center gap-1 text-[11px] text-sage">
+              <Check className="h-3 w-3" /> 保存しました
+            </p>
+          )}
+          <p className="mt-2 text-[10px] leading-relaxed text-ink/40">
+            旅行先など、記録ごとに別の通貨も選べます。金額はいつも日本円(¥)にも換算して表示します。
+          </p>
+        </div>
+      </section>
+
       {/* 予算 */}
       <section className="mt-7">
         <div className="mb-2 flex items-center gap-2 text-[12px] text-ink/55">
@@ -258,9 +320,9 @@ export default function SettingsScreen() {
           予算
         </div>
         <div className="rounded-2xl bg-white/70 p-5 shadow-card ring-1 ring-black/[0.04]">
-          <label className="mb-1.5 block text-[12px] text-ink/55">1か月の予算（S$）</label>
+          <label className="mb-1.5 block text-[12px] text-ink/55">1か月の予算（{sym}）</label>
           <div className="flex items-center rounded-lg border border-black/10 bg-white px-3 focus-within:border-clay">
-            <span className="text-[14px] text-ink/45">S$</span>
+            <span className="text-[14px] text-ink/45">{sym}</span>
             <input
               type="number"
               inputMode="decimal"
@@ -274,7 +336,7 @@ export default function SettingsScreen() {
             />
           </div>
           <p className="mt-2 text-[12px] text-ink/45">
-            週あたり 約 <span className="font-medium text-ink/70">S${weeklyFromMonthly(monthly)}</span>（月予算 ÷ 4）
+            週あたり 約 <span className="font-medium text-ink/70">{sym}{weeklyFromMonthly(monthly)}</span>（月予算 ÷ 4）
           </p>
 
           <button

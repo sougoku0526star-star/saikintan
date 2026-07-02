@@ -28,13 +28,17 @@ const LocationPicker = dynamic(() => import("./LocationPicker"), {
     </div>
   ),
 });
+import { withPortions, macrosFromDetail, tagsForMeal } from "@/lib/nutrition-scale";
+import { fetchRatesToJpy, type RatesToJpy } from "@/lib/fx";
+import { fetchSettings } from "@/lib/settings";
 import {
-  withPortions,
-  macrosFromDetail,
-  tagsForMeal,
-  JPY_PER_SGD,
-} from "@/lib/nutrition-scale";
-import { fetchSgdJpyRate } from "@/lib/fx";
+  CURRENCIES,
+  CURRENCY_CODES,
+  DEFAULT_CURRENCY,
+  FALLBACK_RATES_TO_JPY,
+  toJpy,
+  type CurrencyCode,
+} from "@/lib/currency";
 
 export const MEAL_TYPES = [
   { ja: "朝食", en: "Breakfast" },
@@ -73,23 +77,32 @@ export default function MealEditForm({
   const [mealType, setMealType] = useState(
     MEAL_TYPES.some((t) => t.en === meal.timeLabel) ? meal.timeLabel : "Lunch"
   );
-  const [priceSgd, setPriceSgd] = useState(
-    meal.spend.sgd > 0 ? String(meal.spend.sgd) : ""
+  const [priceAmount, setPriceAmount] = useState(
+    meal.spend.amount > 0 ? String(meal.spend.amount) : ""
+  );
+  const [currency, setCurrency] = useState<CurrencyCode>(
+    meal.spend.currency ?? DEFAULT_CURRENCY
   );
   const [caption, setCaption] = useState(meal.caption);
   const [portions, setPortions] = useState(meal.nutrition?.portions ?? 1);
   const [coords, setCoords] = useState<Coords | undefined>(meal.coords);
-  // 本日の為替レート（1日1回キャッシュ・サーバー取得）。取得まではこれまでのレートを既定に。
-  const [rate, setRate] = useState<number>(meal.spend.rate || JPY_PER_SGD);
+  // 為替レート（各通貨→JPY・1日1回キャッシュ）。取得までフォールバックを既定に。
+  const [rates, setRates] = useState<RatesToJpy>(FALLBACK_RATES_TO_JPY);
   useEffect(() => {
-    fetchSgdJpyRate().then(setRate);
+    fetchRatesToJpy().then(setRates);
   }, []);
+  // 新規記録（金額未入力）は、ユーザーのメイン通貨を既定にする
+  useEffect(() => {
+    if (meal.spend.amount > 0) return;
+    fetchSettings().then((s) => setCurrency(s.mainCurrency));
+  }, [meal.spend.amount]);
 
+  const rate = rates[currency] ?? FALLBACK_RATES_TO_JPY[currency];
   const liveN = meal.nutrition ? withPortions(meal.nutrition, portions) : undefined;
-  const jpy = Math.round((parseFloat(priceSgd) || 0) * rate);
+  const jpy = toJpy(parseFloat(priceAmount) || 0, currency, rates);
 
   const build = (): MealEntry => {
-    const sgd = Math.max(0, parseFloat(priceSgd) || 0);
+    const amount = Math.max(0, parseFloat(priceAmount) || 0);
     const n = meal.nutrition ? withPortions(meal.nutrition, portions) : undefined;
     return {
       ...meal,
@@ -100,7 +113,7 @@ export default function MealEditForm({
       timeLabel: mealType,
       caption: caption.trim() || meal.caption,
       coords,
-      spend: { sgd, jpy: Math.round(sgd * rate), rate },
+      spend: { amount, currency, jpy: toJpy(amount, currency, rates) },
       ...(n
         ? { nutrition: n, macros: macrosFromDetail(n), nutritionTags: tagsForMeal(n) }
         : {}),
@@ -271,24 +284,37 @@ export default function MealEditForm({
           支払った金額（任意・手入力）
         </label>
         <div className="flex items-center gap-2">
+          {/* 通貨選択（旅行先の通貨にも対応） */}
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+            aria-label="通貨"
+            className="rounded-lg border border-black/10 bg-white py-2 pl-2 pr-1 text-[13px] text-ink focus:border-clay focus:outline-none"
+          >
+            {CURRENCY_CODES.map((c) => (
+              <option key={c} value={c}>
+                {CURRENCIES[c].symbol} {c}
+              </option>
+            ))}
+          </select>
           <div className="flex flex-1 items-center rounded-lg border border-black/10 bg-white px-3 focus-within:border-clay">
-            <span className="text-[13px] text-ink/45">S$</span>
+            <span className="text-[13px] text-ink/45">{CURRENCIES[currency].symbol}</span>
             <input
               type="number"
               inputMode="decimal"
-              step="0.1"
-              placeholder="0.00"
-              value={priceSgd}
-              onChange={(e) => setPriceSgd(e.target.value)}
+              step={CURRENCIES[currency].decimals ? "0.1" : "1"}
+              placeholder={CURRENCIES[currency].decimals ? "0.00" : "0"}
+              value={priceAmount}
+              onChange={(e) => setPriceAmount(e.target.value)}
               className="w-full bg-transparent px-2 py-2 text-[14px] text-ink focus:outline-none"
             />
           </div>
-          <span className="w-24 text-right text-[12px] text-ink/45">
+          <span className="w-20 shrink-0 text-right text-[12px] text-ink/45">
             ≈ ¥{jpy.toLocaleString()}
           </span>
         </div>
         <p className="mt-1 text-[10px] text-ink/35">
-          本日のレート 1 SGD ≈ ¥{rate.toFixed(1)}（自動取得）
+          本日のレート 1 {currency} ≈ ¥{rate.toFixed(rate < 1 ? 3 : 1)}（自動取得）
         </p>
       </div>
 

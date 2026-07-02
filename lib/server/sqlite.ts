@@ -112,6 +112,7 @@ export function getDb(): DatabaseSync {
     "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN nickname TEXT",
     "ALTER TABLE messages ADD COLUMN record TEXT",
+    "ALTER TABLE user_settings ADD COLUMN main_currency TEXT",
   ]) {
     try {
       conn.exec(sql);

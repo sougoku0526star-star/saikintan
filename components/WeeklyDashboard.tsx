@@ -14,11 +14,18 @@ import {
   type WeeklyLetter,
 } from "@/lib/weekly";
 import {
-  fetchMonthlyBudget,
+  fetchSettings,
   weeklyFromMonthly,
   SETTINGS_UPDATED,
   DEFAULT_MONTHLY_BUDGET_SGD,
 } from "@/lib/settings";
+import { fetchRatesToJpy, type RatesToJpy } from "@/lib/fx";
+import {
+  DEFAULT_CURRENCY,
+  FALLBACK_RATES_TO_JPY,
+  formatMoney,
+  type CurrencyCode,
+} from "@/lib/currency";
 import GohankunWidget from "./GohankunWidget";
 
 function todayISO() {
@@ -34,6 +41,8 @@ export default function WeeklyDashboard() {
   const [kind, setKind] = useState<PeriodKind>("week");
   const [anchor, setAnchor] = useState<string>(periodStartOf("week", todayISO()));
   const [monthlyBudget, setMonthlyBudget] = useState(DEFAULT_MONTHLY_BUDGET_SGD);
+  const [mainCurrency, setMainCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
+  const [rates, setRates] = useState<RatesToJpy>(FALLBACK_RATES_TO_JPY);
   const [letter, setLetter] = useState<WeeklyLetter | null>(null);
   const [letterLoading, setLetterLoading] = useState(false);
 
@@ -49,12 +58,21 @@ export default function WeeklyDashboard() {
     return () => window.removeEventListener(ALBUM_UPDATED, load);
   }, []);
 
-  // 月予算を取得（週予算は月予算÷4）
+  // 設定（月予算・メイン通貨）を取得（週予算は月予算÷4）
   useEffect(() => {
-    const load = () => fetchMonthlyBudget().then(setMonthlyBudget);
+    const load = () =>
+      fetchSettings().then((s) => {
+        setMonthlyBudget(s.monthlyBudget);
+        setMainCurrency(s.mainCurrency);
+      });
     load();
     window.addEventListener(SETTINGS_UPDATED, load);
     return () => window.removeEventListener(SETTINGS_UPDATED, load);
+  }, []);
+
+  // 為替レート（各通貨→JPY）を取得
+  useEffect(() => {
+    fetchRatesToJpy().then(setRates);
   }, []);
 
   // モード切替時、データのある最新の期間に合わせる
@@ -65,10 +83,11 @@ export default function WeeklyDashboard() {
   }, [kind, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const periodBudget = kind === "week" ? weeklyFromMonthly(monthlyBudget) : monthlyBudget;
+  const rateMain = rates[mainCurrency] ?? FALLBACK_RATES_TO_JPY[mainCurrency];
 
   const stats: PeriodStats = useMemo(
-    () => aggregatePeriod(records, kind, anchor, periodBudget),
-    [records, kind, anchor, periodBudget]
+    () => aggregatePeriod(records, kind, anchor, periodBudget, mainCurrency, rateMain),
+    [records, kind, anchor, periodBudget, mainCurrency, rateMain]
   );
 
   const currentStart = periodStartOf(kind, todayISO());
@@ -81,7 +100,7 @@ export default function WeeklyDashboard() {
       setLetter(null);
       return;
     }
-    const sig = `${stats.kind}:${stats.start}:${stats.mealsCount}:${stats.totalSgd}:${stats.calories}:${stats.budgetSgd}`;
+    const sig = `${stats.kind}:${stats.start}:${stats.mealsCount}:${stats.totalMain}:${stats.calories}:${stats.budgetMain}:${stats.mainCurrency}`;
     const cacheKey = `saikintan:letter:${sig}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
@@ -184,13 +203,13 @@ export default function WeeklyDashboard() {
                 href="/settings"
                 className="flex items-center gap-1 text-[11px] text-ink/40 transition hover:text-clay"
               >
-                予算 S${stats.budgetSgd}/{unit}
+                予算 {formatMoney(stats.budgetMain, stats.mainCurrency)}/{unit}
                 <Pencil className="h-3 w-3" />
               </Link>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="font-serif text-3xl font-semibold text-ink">
-                S${stats.totalSgd.toFixed(1)}
+                {formatMoney(stats.totalMain, stats.mainCurrency)}
               </span>
               <span className="text-[13px] text-ink/45">
                 ≈ ¥{stats.totalJpy.toLocaleString()}

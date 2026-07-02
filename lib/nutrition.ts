@@ -16,8 +16,22 @@ import {
   tagsFromDetail,
   JPY_PER_SGD,
 } from "./nutrition-scale";
+import {
+  DEFAULT_CURRENCY,
+  FALLBACK_RATES_TO_JPY,
+  type CurrencyCode,
+} from "./currency";
 
 export { JPY_PER_SGD };
+
+// 記録確定前の暫定スペンド。実際の金額・通貨・円換算は確認画面(MealEditForm)で確定する。
+function draftSpend(amount: number, currency: CurrencyCode) {
+  return {
+    amount,
+    currency,
+    jpy: Math.round(amount * FALLBACK_RATES_TO_JPY[currency]),
+  };
+}
 
 // ---- 照合（マッチング） ---------------------------------------------------
 
@@ -102,7 +116,8 @@ export interface BuildMealOptions {
   coords?: { lat: number; lng: number };
   date?: string; // ISO
   timeLabel?: string;
-  spendSgd?: number; // 実支払い額が分かる場合
+  spendAmount?: number; // 実支払い額が分かる場合
+  spendCurrency?: CurrencyCode;
 }
 
 function templateCaption(food: FoodNutrition): string {
@@ -113,7 +128,8 @@ function templateCaption(food: FoodNutrition): string {
 export function buildMeal(food: FoodNutrition, opts: BuildMealOptions): MealEntry {
   const portions = opts.portions ?? 1;
   const n = computeNutrition(food, portions);
-  const sgd = opts.spendSgd ?? 0; // 価格は手入力
+  const spendAmount = opts.spendAmount ?? 0;
+  const spendCurrency = opts.spendCurrency ?? DEFAULT_CURRENCY;
   const now = opts.date ? new Date(opts.date) : new Date();
 
   return {
@@ -126,7 +142,7 @@ export function buildMeal(food: FoodNutrition, opts: BuildMealOptions): MealEntr
     coords: opts.coords,
     date: now.toISOString().slice(0, 10),
     timeLabel: opts.timeLabel ?? "Today",
-    spend: { sgd, jpy: Math.round(sgd * JPY_PER_SGD), rate: JPY_PER_SGD },
+    spend: draftSpend(spendAmount, spendCurrency),
     macros: toMacros(n),
     nutritionTags: toNutritionTags(n),
     nutrition: n,
@@ -147,7 +163,8 @@ export interface EstimateInput {
   caption?: string;
   location?: string;
   coords?: { lat: number; lng: number };
-  spendSgd?: number;
+  spendAmount?: number;
+  spendCurrency?: CurrencyCode;
 }
 
 function slugifyName(name: string): string {
@@ -171,7 +188,8 @@ export function buildMealFromEstimate(opts: EstimateInput): MealEntry {
     sodium: Math.round(opts.sodium),
     portions: 1,
   };
-  const sgd = opts.spendSgd ?? 0; // 価格は手入力
+  const spendAmount = opts.spendAmount ?? 0;
+  const spendCurrency = opts.spendCurrency ?? DEFAULT_CURRENCY;
   const now = new Date();
 
   return {
@@ -186,7 +204,7 @@ export function buildMealFromEstimate(opts: EstimateInput): MealEntry {
     coords: opts.coords,
     date: now.toISOString().slice(0, 10),
     timeLabel: "Today",
-    spend: { sgd, jpy: Math.round(sgd * JPY_PER_SGD), rate: JPY_PER_SGD },
+    spend: draftSpend(spendAmount, spendCurrency),
     macros: toMacros(n),
     // 先頭に「AI推定」タグを付けて概算であることを明示
     nutritionTags: [
@@ -228,7 +246,8 @@ export function buildMealFromUserFood(
     sodium: Math.round(uf.sodium * portions),
     portions,
   };
-  const sgd = opts.spendSgd ?? 0; // 価格は手入力
+  const spendAmount = opts.spendAmount ?? 0;
+  const spendCurrency = opts.spendCurrency ?? DEFAULT_CURRENCY;
   const now = opts.date ? new Date(opts.date) : new Date();
 
   return {
@@ -243,7 +262,7 @@ export function buildMealFromUserFood(
     coords: opts.coords,
     date: now.toISOString().slice(0, 10),
     timeLabel: opts.timeLabel ?? "Today",
-    spend: { sgd, jpy: Math.round(sgd * JPY_PER_SGD), rate: JPY_PER_SGD },
+    spend: draftSpend(spendAmount, spendCurrency),
     macros: toMacros(n),
     nutritionTags: toNutritionTags(n),
     nutrition: n,

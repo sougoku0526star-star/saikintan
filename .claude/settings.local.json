@@ -15,7 +15,8 @@
       "Bash(npx tsc *)",
       "Bash(echo \"tsc exit: $?\")",
       "Bash(node -e \"console.log\\('react-map-gl', require\\('./node_modules/react-map-gl/package.json'\\).version\\); console.log\\('mapbox-gl', require\\('./node_modules/mapbox-gl/package.json'\\).version\\)\")",
-      "Bash(git switch *)"
+      "Bash(git switch *)",
+      "Bash(grep -n \"totalSgd\\\\|totalJpy\\\\|budgetSgd\\\\|budgetPct\\\\|S\\\\\\\\$\\\\|aggregatePeriod\\\\|fetchMonthlyBudget\\\\|spend\" components/WeeklyDashboard.tsx)"
     ]
   }
 }

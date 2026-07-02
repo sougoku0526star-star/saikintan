@@ -187,10 +187,10 @@ function RecordCard({ record, fromMe }: { record: SharedRecord; fromMe: boolean 
               {record.calories} kcal
             </span>
           )}
-          {typeof record.spendSgd === "number" && (
+          {record.spendLabel && (
             <span className="flex items-center gap-0.5 rounded-full bg-gold/10 px-2 py-0.5 text-gold">
               <Coins className="h-3 w-3" />
-              S${record.spendSgd.toFixed(2)}
+              {record.spendLabel}
             </span>
           )}
         </div>

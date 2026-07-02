@@ -121,7 +121,7 @@ export interface SharedRecord {
   date: string;
   timeLabel: string;
   calories?: number;
-  spendSgd?: number;
+  spendLabel?: string;
   spendJpy?: number;
 }
 
