@@ -166,7 +166,10 @@ export interface WeeklyLetter {
 export function fallbackLetter(s: PeriodStats): WeeklyLetter {
   const term = s.kind === "week" ? "今週" : "今月";
   const within = s.totalMain <= s.budgetMain;
-  const money = `${formatMoney(s.totalMain, s.mainCurrency)}（約 ¥${s.totalJpy.toLocaleString()}）`;
+  const money =
+    s.mainCurrency === "JPY"
+      ? formatMoney(s.totalMain, s.mainCurrency)
+      : `${formatMoney(s.totalMain, s.mainCurrency)}（約 ¥${s.totalJpy.toLocaleString()}）`;
   const dominant =
     s.pfcPct.carb >= s.pfcPct.fat && s.pfcPct.carb >= s.pfcPct.protein
       ? "炭水化物"

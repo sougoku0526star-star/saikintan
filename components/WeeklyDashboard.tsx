@@ -211,9 +211,11 @@ export default function WeeklyDashboard() {
               <span className="font-serif text-3xl font-semibold text-ink">
                 {formatMoney(stats.totalMain, stats.mainCurrency)}
               </span>
-              <span className="text-[13px] text-ink/45">
-                ≈ ¥{stats.totalJpy.toLocaleString()}
-              </span>
+              {stats.mainCurrency !== "JPY" && (
+                <span className="text-[13px] text-ink/45">
+                  ≈ ¥{stats.totalJpy.toLocaleString()}
+                </span>
+              )}
             </div>
             <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-ink/[0.07]">
               <div

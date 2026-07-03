@@ -309,13 +309,17 @@ export default function MealEditForm({
               className="w-full bg-transparent px-2 py-2 text-[14px] text-ink focus:outline-none"
             />
           </div>
-          <span className="w-20 shrink-0 text-right text-[12px] text-ink/45">
-            ≈ ¥{jpy.toLocaleString()}
-          </span>
+          {currency !== "JPY" && (
+            <span className="w-20 shrink-0 text-right text-[12px] text-ink/45">
+              ≈ ¥{jpy.toLocaleString()}
+            </span>
+          )}
         </div>
-        <p className="mt-1 text-[10px] text-ink/35">
-          本日のレート 1 {currency} ≈ ¥{rate.toFixed(rate < 1 ? 3 : 1)}（自動取得）
-        </p>
+        {currency !== "JPY" && (
+          <p className="mt-1 text-[10px] text-ink/35">
+            本日のレート 1 {currency} ≈ ¥{rate.toFixed(rate < 1 ? 3 : 1)}（自動取得）
+          </p>
+        )}
       </div>
 
       {/* 場所（地図でドラッグ調整） */}

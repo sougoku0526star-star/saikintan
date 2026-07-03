@@ -2,6 +2,7 @@
 // 表示の基準は常に日本円(JPY)。各通貨→JPYのレートで換算する。
 
 export type CurrencyCode =
+  | "JPY"
   | "SGD"
   | "USD"
   | "CAD"
@@ -19,6 +20,7 @@ export interface CurrencyInfo {
 }
 
 export const CURRENCIES: Record<CurrencyCode, CurrencyInfo> = {
+  JPY: { code: "JPY", symbol: "¥", label: "日本円", decimals: 0 },
   SGD: { code: "SGD", symbol: "S$", label: "シンガポールドル", decimals: 2 },
   USD: { code: "USD", symbol: "$", label: "米ドル", decimals: 2 },
   CAD: { code: "CAD", symbol: "CA$", label: "カナダドル", decimals: 2 },
@@ -42,6 +44,7 @@ export function toCurrency(x: unknown): CurrencyCode {
 
 /** API/キャッシュ失敗時のフォールバック（1通貨 = ? JPY・概算）。 */
 export const FALLBACK_RATES_TO_JPY: Record<CurrencyCode, number> = {
+  JPY: 1,
   SGD: 116,
   USD: 157,
   CAD: 114,

@@ -209,7 +209,9 @@ export default function JournalContent({
         {meal.spend.amount > 0 ? (
           <Badge tone="gold" icon={<Coins className="h-3.5 w-3.5" />}>
             {formatMoney(meal.spend.amount, meal.spend.currency)}
-            <span className="text-gold/60">≈ ¥{meal.spend.jpy.toLocaleString()}</span>
+            {meal.spend.currency !== "JPY" && (
+              <span className="text-gold/60">≈ ¥{meal.spend.jpy.toLocaleString()}</span>
+            )}
           </Badge>
         ) : (
           <Badge tone="neutral" icon={<Coins className="h-3.5 w-3.5" />}>
@@ -336,7 +338,7 @@ export default function JournalContent({
       </div>
 
       {/* 為替メモ */}
-      {meal.spend.amount > 0 && (
+      {meal.spend.amount > 0 && meal.spend.currency !== "JPY" && (
         <p className="mt-4 text-center text-[11px] text-ink/35">
           換算レート 1 {meal.spend.currency} ≈ ¥
           {(meal.spend.jpy / meal.spend.amount).toFixed(meal.spend.jpy / meal.spend.amount < 1 ? 3 : 1)}

@@ -17,6 +17,7 @@ export const REGION_LABEL: Record<RegionCode, string> = {
 };
 
 const CURRENCY_REGION: Record<CurrencyCode, RegionCode> = {
+  JPY: "JP",
   SGD: "SG",
   USD: "US",
   CAD: "CA",

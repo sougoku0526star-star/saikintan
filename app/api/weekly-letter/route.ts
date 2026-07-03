@@ -55,7 +55,7 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 # ${term}の集計
 - 期間: ${stats.label}
 - 記録数: ${stats.mealsCount}食
-- 食費: ${formatMoney(stats.totalMain, stats.mainCurrency)}（約¥${stats.totalJpy}） / 予算 ${formatMoney(stats.budgetMain, stats.mainCurrency)}（${stats.budgetPct}%）
+- 食費: ${formatMoney(stats.totalMain, stats.mainCurrency)}${stats.mainCurrency === "JPY" ? "" : `（約¥${stats.totalJpy}）`} / 予算 ${formatMoney(stats.budgetMain, stats.mainCurrency)}（${stats.budgetPct}%）
 - 総カロリー: ${stats.calories}kcal
 - PFCカロリー比: タンパク質${stats.pfcPct.protein}% / 脂質${stats.pfcPct.fat}% / 炭水化物${stats.pfcPct.carb}%
 - 塩分合計: ${stats.sodium}mg
