@@ -2,7 +2,25 @@
 // 読み取り専用の参照データ。画像解析の結果をこの表に突き合わせて栄養・カロリーを計算する。
 // 出典CSV: gemini-code-1781533469919.csv ／ 日本語名(nameJa)は手動付与。
 
-export type FoodCategory = "Dessert" | "Drink" | "Noodles" | "Rice" | "Salad" | "Seafood" | "Snack" | "Soup" | "Vegetable";
+import type { RegionCode } from "./region";
+
+export type FoodCategory =
+  | "Dessert"
+  | "Drink"
+  | "Noodles"
+  | "Rice"
+  | "Salad"
+  | "Seafood"
+  | "Snack"
+  | "Soup"
+  | "Vegetable"
+  // 外食チェーン用
+  | "Burger"
+  | "Sandwich"
+  | "SideDish"
+  | "Breakfast"
+  | "Sweets"
+  | "MainDish";
 
 export interface FoodNutrition {
   /** 元データの連番ID */
@@ -20,6 +38,12 @@ export interface FoodNutrition {
   fat: number; // g
   carb: number; // g
   sodium: number; // mg
+  /** この栄養値が属する地域（外食チェーン等）。未指定は地域非依存のローカル料理。 */
+  region?: RegionCode;
+  /** 外食チェーン名（あれば） */
+  chain?: string;
+  /** 出典（あれば） */
+  source?: string;
 }
 
 export const foods: FoodNutrition[] = [

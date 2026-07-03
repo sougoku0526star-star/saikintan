@@ -55,6 +55,8 @@ export interface MealEntry {
   nutrition?: NutritionDetail;
   /** AIの料理判定の自信度 0.0〜1.0（あれば。低いとき注意表示） */
   confidence?: number;
+  /** 栄養値の出典・地域メモ（外食チェーン等。例: マクドナルド公式(日本) を参照した推定） */
+  source?: string;
 }
 
 export const meals: MealEntry[] = [

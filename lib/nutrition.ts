@@ -3,12 +3,9 @@
 // カロリー・PFC・塩分を計算し、アプリのUI(MealEntry)が使える形に変換する。
 // ※ 算術はすべてここ（コード側）で行う。LLMには「どの料理か」「何人前か」だけ任せる。
 
-import {
-  foods,
-  foodsBySlug,
-  foodsById,
-  type FoodNutrition,
-} from "./nutrition-data";
+import { foods, type FoodNutrition } from "./nutrition-data";
+import { restaurantFoods } from "./restaurant-data";
+import { regionLabel, type RegionCode } from "./region";
 import type { MealEntry } from "./mock-data";
 import {
   round1,
@@ -35,6 +32,15 @@ function draftSpend(amount: number, currency: CurrencyCode) {
 
 // ---- 照合（マッチング） ---------------------------------------------------
 
+// ローカル料理（地域非依存）＋ 外食チェーン（region付き）を合わせた全マスター。
+const allFoods: FoodNutrition[] = [...foods, ...restaurantFoods];
+const allBySlug: Record<string, FoodNutrition> = Object.fromEntries(
+  allFoods.map((f) => [f.slug, f])
+);
+const allById: Record<number, FoodNutrition> = Object.fromEntries(
+  allFoods.map((f) => [f.id, f])
+);
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -45,7 +51,7 @@ function normalize(s: string): string {
 
 // 正規化した name -> food の索引（表記ゆれ対策の簡易フォールバック）
 const byNormalizedName: Record<string, FoodNutrition> = Object.fromEntries(
-  foods.map((f) => [normalize(f.name), f])
+  allFoods.map((f) => [normalize(f.name), f])
 );
 
 /**
@@ -53,14 +59,14 @@ const byNormalizedName: Record<string, FoodNutrition> = Object.fromEntries(
  * 1) slug 完全一致 → 2) id → 3) 正規化名の完全一致 → 4) 部分一致
  */
 export function findFood(query: string | number): FoodNutrition | undefined {
-  if (typeof query === "number") return foodsById[query];
+  if (typeof query === "number") return allById[query];
   const q = query.trim();
-  if (foodsBySlug[q]) return foodsBySlug[q];
-  if (/^\d+$/.test(q) && foodsById[Number(q)]) return foodsById[Number(q)];
+  if (allBySlug[q]) return allBySlug[q];
+  if (/^\d+$/.test(q) && allById[Number(q)]) return allById[Number(q)];
   const n = normalize(q);
   if (byNormalizedName[n]) return byNormalizedName[n];
   // 部分一致（例: "chicken rice" → "Hainanese Chicken Rice (Steamed)"）
-  return foods.find((f) => {
+  return allFoods.find((f) => {
     const fn = normalize(f.name);
     return fn.includes(n) || n.includes(fn);
   });
@@ -118,6 +124,7 @@ export interface BuildMealOptions {
   timeLabel?: string;
   spendAmount?: number; // 実支払い額が分かる場合
   spendCurrency?: CurrencyCode;
+  region?: RegionCode; // ユーザーの地域（チェーン料理の地域補正判定に使う）
 }
 
 function templateCaption(food: FoodNutrition): string {
@@ -132,6 +139,26 @@ export function buildMeal(food: FoodNutrition, opts: BuildMealOptions): MealEntr
   const spendCurrency = opts.spendCurrency ?? DEFAULT_CURRENCY;
   const now = opts.date ? new Date(opts.date) : new Date();
 
+  // 外食チェーンの栄養は地域依存。ユーザーの地域とデータの地域が違えば
+  // 「その地域では差がある目安」として概算扱いにし、出典を明記する。
+  const crossRegion =
+    !!food.region && !!opts.region && food.region !== opts.region;
+  let nutrition: ComputedNutrition & { estimated?: boolean } = n;
+  let tags = toNutritionTags(n);
+  let source: string | undefined;
+  if (food.chain) {
+    const official = food.source ?? `${food.chain}公式`;
+    if (crossRegion) {
+      nutrition = { ...n, estimated: true };
+      tags = [{ label: "地域の目安", tone: "neutral" as const }, ...tags.slice(0, 2)];
+      source = `${official}（${regionLabel(food.region!)}）を参照。${regionLabel(
+        opts.region!
+      )}では実際の値と差がある場合があります`;
+    } else {
+      source = `${official}（${regionLabel(food.region ?? "JP")}）`;
+    }
+  }
+
   return {
     id: food.slug,
     dishName: food.name,
@@ -143,9 +170,10 @@ export function buildMeal(food: FoodNutrition, opts: BuildMealOptions): MealEntr
     date: now.toISOString().slice(0, 10),
     timeLabel: opts.timeLabel ?? "Today",
     spend: draftSpend(spendAmount, spendCurrency),
-    macros: toMacros(n),
-    nutritionTags: toNutritionTags(n),
-    nutrition: n,
+    macros: toMacros(nutrition),
+    nutritionTags: tags,
+    nutrition,
+    ...(source ? { source } : {}),
   };
 }
 
@@ -165,6 +193,7 @@ export interface EstimateInput {
   coords?: { lat: number; lng: number };
   spendAmount?: number;
   spendCurrency?: CurrencyCode;
+  source?: string; // 出典・地域メモ（チェーン料理の地域補正など）
 }
 
 function slugifyName(name: string): string {
@@ -212,6 +241,7 @@ export function buildMealFromEstimate(opts: EstimateInput): MealEntry {
       ...toNutritionTags(n).slice(0, 2),
     ],
     nutrition: { ...n, estimated: true },
+    ...(opts.source ? { source: opts.source } : {}),
   };
 }
 

@@ -9,8 +9,11 @@ import {
   type UserFoodLite,
 } from "@/lib/nutrition";
 import { foods } from "@/lib/nutrition-data";
+import { restaurantReference } from "@/lib/restaurant-data";
 import { getUserId, getAuthUser } from "@/lib/server/user";
 import { listFoods } from "@/lib/server/db";
+import { getSettings } from "@/lib/server/settings-db";
+import { currencyToRegion, regionLabel, type RegionCode } from "@/lib/region";
 import { MAPBOX_TOKEN } from "@/lib/mapbox";
 import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
 
@@ -78,9 +81,11 @@ export async function POST(req: Request) {
   if (body.slug || body.foodId) {
     const food = findFood(body.foodId ?? body.slug!);
     if (!food) return NextResponse.json({ error: "food not found" }, { status: 404 });
+    const region = currencyToRegion(getSettings(getUserId()).mainCurrency);
     const meal = buildMeal(food, {
       photo: body.photo || "",
       portions: body.portions ?? 1,
+      region,
     });
     return NextResponse.json({ meal, source: "lookup" });
   }
@@ -90,14 +95,18 @@ export async function POST(req: Request) {
   if (body.imageBase64 && apiKey) {
     try {
       // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
-      const userFoods: UserFoodLite[] = listFoods(getUserId());
+      const uid = getUserId();
+      const userFoods: UserFoodLite[] = listFoods(uid);
       const me = getAuthUser();
       const userName = me?.nickname ?? me?.username ?? null;
+      // ユーザーの地域（メイン通貨から推定）。チェーン料理の地域補正に使う。
+      const userRegion = currencyToRegion(getSettings(uid).mainCurrency);
       const analysis = await analyzeWithClaude(
         body.imageBase64,
         toMedia(body.mimeType),
         userFoods,
-        userName
+        userName,
+        userRegion
       );
 
       // 位置：写真EXIFのGPSがあれば優先、無ければ場所名をジオコーディング
@@ -114,6 +123,7 @@ export async function POST(req: Request) {
           caption: analysis.caption,
           location: analysis.location,
           coords,
+          region: userRegion,
         });
         return NextResponse.json({
           meal,
@@ -139,7 +149,11 @@ export async function POST(req: Request) {
         });
       }
 
-      // 辞書に該当なし：写真からAIが直接推定した栄養を採用（概算）
+      // 辞書に該当なし：写真からAIが直接推定した栄養を採用（概算）。
+      // チェーン料理を地域補正した場合は出典メモを付ける。
+      const source = analysis.chain
+        ? `${analysis.chain}公式（日本）を参照した${regionLabel(userRegion)}の推定値`
+        : undefined;
       const meal = buildMealFromEstimate({
         name: analysis.dishNameEn || "Unknown dish",
         nameJa: analysis.dishNameJa || analysis.dishNameEn || "不明な料理",
@@ -152,10 +166,11 @@ export async function POST(req: Request) {
         caption: analysis.caption,
         location: analysis.location,
         coords,
+        source,
       });
       return NextResponse.json({
         meal,
-        source: "vision_estimate",
+        source: analysis.chain ? "vision_regional" : "vision_estimate",
         confidence: analysis.confidence,
       });
     } catch (e) {
@@ -190,6 +205,7 @@ interface VisionResult {
   fat: number;
   carb: number;
   sodium: number;
+  chain: string; // 地域補正したチェーン名（例: マクドナルド）。無ければ ""
 }
 
 // 構造化出力で、必ずこの形のJSONが返る。
@@ -213,6 +229,11 @@ const RESULT_SCHEMA = {
     fat: { type: "number", description: "推定脂質(g)" },
     carb: { type: "number", description: "推定炭水化物(g)" },
     sodium: { type: "number", description: "推定塩分(mg)" },
+    chain: {
+      type: "string",
+      description:
+        "チェーン参照リストの料理を地域補正して栄養を出した場合のチェーン名（例: マクドナルド）。それ以外は空文字 ''。",
+    },
   },
   required: [
     "slug",
@@ -227,6 +248,7 @@ const RESULT_SCHEMA = {
     "fat",
     "carb",
     "sodium",
+    "chain",
   ],
   additionalProperties: false,
 } as const;
@@ -235,7 +257,8 @@ async function analyzeWithClaude(
   imageBase64: string,
   mediaType: SupportedMedia,
   userFoods: UserFoodLite[] = [],
-  userName: string | null = null
+  userName: string | null = null,
+  userRegion: RegionCode = "SG"
 ): Promise<VisionResult> {
   const client = new Anthropic(); // ANTHROPIC_API_KEY を環境から自動取得
   const you = gohankunYou(userName);
@@ -251,6 +274,15 @@ async function analyzeWithClaude(
     ? `\n\n# あなたの辞書（最優先で照合。一致すればこのslugを返す）\n${userList}`
     : "";
 
+  const regionJa = regionLabel(userRegion);
+  const isJapan = userRegion === "JP";
+  const chainRule = isJapan
+    ? `ユーザーの地域は日本です。写真がチェーン参照リストの料理なら、その slug を返してください（日本公式値をそのまま使います）。`
+    : `ユーザーの地域は「${regionJa}」です。写真がチェーン参照リストの料理（＝日本の公式値）なら、
+その日本公式値を土台に「${regionJa}」で実際に提供されている同一メニューの栄養へ調整して、
+slug は "none"、dish_name_* に料理名、calories/protein/fat/carb/sodium に${regionJa}向けの推定値、
+chain にチェーン名（例: マクドナルド）を入れて返してください。地域差が不明なら日本公式値に近い値で構いません。`;
+
   const prompt = `次の食事写真を分析してください。料理の判定と栄養の数値は、空想ではなく
 現実的で正確に見積もること（ここはプロの栄養士として厳密に）。
 
@@ -263,12 +295,19 @@ slug が "none" の場合でも、写真から料理名（英語・日本語）�
 できる限り正確に見積もってください。料理が辞書にあってもなくても、
 これらの推定値は必ず記入してください。
 
+# 外食チェーンの地域補正
+${chainRule}
+チェーンでない場合は chain を空文字 '' にしてください。
+
 ただし caption フィールドだけは、キャラクター「ごはんくん」として
 ${you}に語りかける日記風コメントを書いてください（system の人格・口調に従う）。
 ${userSection}
 
 # 標準の料理リスト（slug<TAB>料理名）
-${standardList}`;
+${standardList}
+
+# チェーン参照リスト（日本公式値。slug<TAB>チェーン 料理名<TAB>栄養）
+${restaurantReference()}`;
 
   // 構造化出力（output_config.format）で必ずスキーマ通りのJSONを得る
   const msg = await client.messages.create({
@@ -308,5 +347,6 @@ ${standardList}`;
     fat: Number(json.fat) || 0,
     carb: Number(json.carb) || 0,
     sodium: Number(json.sodium) || 0,
+    chain: String(json.chain ?? ""),
   };
 }

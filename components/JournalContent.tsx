@@ -239,7 +239,14 @@ export default function JournalContent({
           </span>
         </div>
 
-        {n?.estimated && (
+        {meal.source && (
+          <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-sage/8 px-3 py-2 text-[11px] leading-relaxed text-ink/60">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sage" />
+            出典: {meal.source}
+          </p>
+        )}
+
+        {n?.estimated && !meal.source && (
           <p className="mb-3 rounded-lg bg-clay/5 px-3 py-2 text-[11px] leading-relaxed text-ink/55">
             この料理はまだ栄養データベースに無いため、写真からAIが推定した概算値です。実際と差が出ることがあります。
           </p>
