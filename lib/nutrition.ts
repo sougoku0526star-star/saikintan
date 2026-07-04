@@ -5,6 +5,7 @@
 
 import { foods, type FoodNutrition } from "./nutrition-data";
 import { restaurantFoods } from "./restaurant-data";
+import { japaneseFoods } from "./japanese-data";
 import { regionLabel, type RegionCode } from "./region";
 import type { MealEntry } from "./mock-data";
 import {
@@ -32,8 +33,8 @@ function draftSpend(amount: number, currency: CurrencyCode) {
 
 // ---- 照合（マッチング） ---------------------------------------------------
 
-// ローカル料理（地域非依存）＋ 外食チェーン（region付き）を合わせた全マスター。
-const allFoods: FoodNutrition[] = [...foods, ...restaurantFoods];
+// ローカル料理＋日本料理（地域非依存）＋ 外食チェーン（region付き）を合わせた全マスター。
+const allFoods: FoodNutrition[] = [...foods, ...japaneseFoods, ...restaurantFoods];
 const allBySlug: Record<string, FoodNutrition> = Object.fromEntries(
   allFoods.map((f) => [f.slug, f])
 );
@@ -72,9 +73,14 @@ export function findFood(query: string | number): FoodNutrition | undefined {
   });
 }
 
-/** 画像解析モデルに渡す「分類先の選択肢」一覧（slug + name）。 */
+/** 画像解析モデルに渡す「分類先の選択肢」一覧（slug + name）。
+ *  ローカル料理＋日本料理を含む（外食チェーンは別枠の参照リストで扱う）。 */
 export function foodTaxonomy(): { slug: string; name: string; category: string }[] {
-  return foods.map((f) => ({ slug: f.slug, name: f.name, category: f.category }));
+  return [...foods, ...japaneseFoods].map((f) => ({
+    slug: f.slug,
+    name: f.name,
+    category: f.category,
+  }));
 }
 
 // ---- 計算 -----------------------------------------------------------------
@@ -157,6 +163,9 @@ export function buildMeal(food: FoodNutrition, opts: BuildMealOptions): MealEntr
     } else {
       source = `${official}（${regionLabel(food.region ?? "JP")}）`;
     }
+  } else if (food.source) {
+    // 出典のある一般料理（日本料理など）は出典だけ表示（地域補正なし）
+    source = food.source;
   }
 
   return {
