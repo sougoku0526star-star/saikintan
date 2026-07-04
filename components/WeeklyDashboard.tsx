@@ -255,7 +255,7 @@ export default function WeeklyDashboard() {
               </>
             ) : (
               <p className="py-6 text-center text-[13px] text-ink/40">
-                {letterLoading ? "AIが手紙を書いています…" : "—"}
+                {letterLoading ? "ごはんくんが手紙を書いています…" : "—"}
               </p>
             )}
             <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-clay/5" />

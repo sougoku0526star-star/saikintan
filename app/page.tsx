@@ -40,7 +40,7 @@ export default function HomePage() {
       <CreatedSection />
 
       <p className="py-10 text-center text-[11px] text-ink/30">
-        ＋ で写真を1枚足すだけ。あとはAIにおまかせ。
+        ＋ で写真を1枚足すだけ。あとはごはんくんにおまかせ。
       </p>
     </div>
   );
