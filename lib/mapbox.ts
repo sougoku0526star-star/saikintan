@@ -1,7 +1,9 @@
-// Mapbox の公開トークンとスタイル（pkトークンはクライアント公開前提のもの）。
-export const MAPBOX_TOKEN =
-  "__MAPBOX_TOKEN_REMOVED__";
+// Mapbox の公開トークンとスタイル。
+// トークンは環境変数から読む（NEXT_PUBLIC_ 接頭辞でクライアントに露出。値はコードに直書きしない）。
+// ローカルは .env.local、本番はホスティングの環境変数に NEXT_PUBLIC_MAPBOX_TOKEN を設定する。
+export const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 export const MAPBOX_STYLE =
+  process.env.NEXT_PUBLIC_MAPBOX_STYLE ??
   "mapbox://styles/bewiththeforce/cmqjly5ag001t01re5h7i85xy";
 
 // シンガポール中心（フォールバック）
