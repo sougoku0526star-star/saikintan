@@ -23,7 +23,9 @@ function spreadHtml(s: Spread): string {
     <div class="photos">${gridHtml(s.photos)}</div>
     <div class="comment">
       <img class="mascot" src="/gohankun/gohankun-${s.mascot}.png" alt="ごはんくん"/>
-      <div class="bubble">${esc(s.comment)}</div>
+      <div class="bubble${s.fromMemoryLetter ? " letter" : ""}">${
+        s.fromMemoryLetter ? `<span class="letter-tag">思い出レター</span>` : ""
+      }${esc(s.comment)}</div>
     </div>
   </section>`;
 }
@@ -81,6 +83,9 @@ export function buildPrintHtml(book: {
   .mascot { width: 13mm; height: 13mm; object-fit: contain; flex: none; }
   .bubble { flex:1; background:#FFFCF6; border:0.3mm solid rgba(61,49,42,.08);
     border-radius: 4mm; border-bottom-left-radius: 1mm; padding: 2.5mm 3mm; font-size: 8.5pt; line-height: 1.6; }
+  /* 思い出レター由来のコメントは便箋風に */
+  .bubble.letter { background:#FBF6EC; border-color: rgba(180,138,62,.28); }
+  .letter-tag { display:block; margin-bottom: 1mm; font-size: 6.5pt; letter-spacing: .05em; color: rgba(201,110,74,.75); }
   @media screen { body { padding: 16px; display:flex; flex-direction:column; align-items:center; gap:16px; }
     .page { box-shadow: 0 8px 24px rgba(0,0,0,.18); } }
 </style></head>

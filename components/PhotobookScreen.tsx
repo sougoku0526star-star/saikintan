@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { BookOpen, Download, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
+import { BookOpen, Download, ChevronLeft, ChevronRight, MapPin, Feather } from "lucide-react";
 import { fetchRecords, ALBUM_UPDATED, type CreatedEntry } from "@/lib/created-store";
 import { fetchMe, AUTH_UPDATED, type AuthUser } from "@/lib/auth";
 import {
@@ -289,16 +289,31 @@ function EditorialCaption({
 function EditorNote({
   mascot,
   comment,
+  fromLetter = false,
   className = "",
 }: {
   mascot: Spread["mascot"];
   comment: string;
+  /** comment が思い出レター由来のとき、便箋風に見せて“交換日記”感を出す */
+  fromLetter?: boolean;
   className?: string;
 }) {
   return (
     <div className={`flex items-end gap-1.5 ${className}`}>
       <GohankunWidget state={mascot} size="xs" bubble={false} />
-      <div className="rounded-xl rounded-bl-sm bg-cream/95 px-2 py-1 text-[8.5px] leading-relaxed text-ink/75 shadow-soft ring-1 ring-ink/[0.06]">
+      <div
+        className={`rounded-xl rounded-bl-sm px-2 py-1 text-[8.5px] leading-relaxed shadow-soft ${
+          fromLetter
+            ? "bg-[#FBF6EC] text-ink/80 ring-1 ring-[#E7D9BE]"
+            : "bg-cream/95 text-ink/75 ring-1 ring-ink/[0.06]"
+        }`}
+      >
+        {fromLetter && (
+          <span className="mb-0.5 flex items-center gap-0.5 text-[7px] tracking-wide text-clay/70">
+            <Feather className="h-2 w-2" />
+            思い出レター
+          </span>
+        )}
         {comment}
       </div>
     </div>
@@ -373,7 +388,7 @@ function SoloSpread({ spread }: { spread: Spread }) {
       left={
         <div className="flex h-full flex-col justify-between p-5">
           <EditorialCaption dateISO={spread.dateISO} location={spread.location} />
-          <EditorNote mascot={spread.mascot} comment={spread.comment} />
+          <EditorNote mascot={spread.mascot} comment={spread.comment} fromLetter={spread.fromMemoryLetter} />
         </div>
       }
       right={<Photo p={spread.photos[0]} className="h-full w-full rounded-none" />}
@@ -395,7 +410,7 @@ function AirySpread({ spread }: { spread: Spread }) {
       right={
         <div className="relative h-full p-4">
           <Photo p={b} className="ml-auto h-[56%] w-[78%]" />
-          <EditorNote mascot={spread.mascot} comment={spread.comment} className="absolute inset-x-4 bottom-4" />
+          <EditorNote mascot={spread.mascot} comment={spread.comment} fromLetter={spread.fromMemoryLetter} className="absolute inset-x-4 bottom-4" />
         </div>
       }
     />
@@ -427,7 +442,7 @@ function HeroGridSpread({ spread }: { spread: Spread }) {
               <Photo key={p.src} p={p} className={three && i === 0 ? "col-span-2" : ""} />
             ))}
           </div>
-          <EditorNote mascot={spread.mascot} comment={spread.comment} className="mt-2" />
+          <EditorNote mascot={spread.mascot} comment={spread.comment} fromLetter={spread.fromMemoryLetter} className="mt-2" />
         </div>
       }
     />

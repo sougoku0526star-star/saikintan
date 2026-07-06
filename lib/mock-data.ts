@@ -57,6 +57,21 @@ export interface MealEntry {
   confidence?: number;
   /** 栄養値の出典・地域メモ（外食チェーン等。例: マクドナルド公式(日本) を参照した推定） */
   source?: string;
+  /** 「思い出にする」フラグ（指示書の is_memory 相当）。
+   *  ※ memoryPhoto（思い出写真1枚）や photobook の kind:"memory"（写真の種別）とは別概念。
+   *  こちらは「この食事を思い出として残し、ごはんくんが手紙を書く」ためのフラグ。 */
+  isMemory?: boolean;
+  /** ごはんくんが綴った思い出レター（指示書の letter_greeting/body/sign/edited をまとめて保持）。
+   *  DBは meal_records.data の JSON blob なので、専用カラムでなくこのオブジェクトで永続化する。 */
+  memoryLetter?: MemoryLetter;
+}
+
+/** ごはんくんの思い出レター。「思い出にする」ONで生成され、ユーザーが書き換えられる。 */
+export interface MemoryLetter {
+  greeting: string;
+  body: string[]; // 段落配列（指示書の letter_body。JSON blob なので配列のまま格納）
+  sign: string;
+  edited: boolean; // ユーザーが書き換えたら true（再生成で上書き禁止＝指示書の letter_edited）
 }
 
 export const meals: MealEntry[] = [
