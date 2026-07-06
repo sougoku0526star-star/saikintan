@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { fallbackLetter, type PeriodStats, type WeeklyLetter } from "@/lib/weekly";
+import {
+  fallbackLetter,
+  toNutritionTrend,
+  nutritionTrendLabels,
+  type PeriodStats,
+  type WeeklyLetter,
+} from "@/lib/weekly";
 import { getAuthUser } from "@/lib/server/user";
 import {
   gohankunSystemPrompt,
@@ -47,12 +53,14 @@ export async function POST(req: Request) {
     const userName = me?.nickname ?? me?.username ?? null;
     const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
+    const trendLabels = nutritionTrendLabels(toNutritionTrend(stats));
     const prompt = `${you}の${term}の食事記録の集計だよ。これをもとに、ごはんくんから
 ${you}へ、あたたかく前向きな短い手紙を日本語で書いてください。
 
 # ルール
-- 具体的な数値（食費・予算・栄養傾向）に、ごはんくんらしく自然に触れる
-- 責めない。サボり気味・栄養が偏っていても、怒らず「寂しがる・心配する」寄り添いトーンで、軽い提案を1つ
+- 支出（食費・予算・%）は具体的な数値に自然に触れてよい（支出は精密）
+- 栄養について数値（g・kcal・%・mg）は絶対に使わない。方向感の言葉（「少なめ」「いい感じ」「多め」）だけで語る
+- 責めない。サボり気味・栄養が偏っていても、怒らず「寂しがる・心配する」寄り添いトーンで、軽い提案を1つだけ
 - 海外でがんばる${you}に寄り添うあたたかい一言を必ず添える
 - body は2〜3段落、各60〜120字程度。署名は必ず「— ごはんくんより」
 
@@ -60,9 +68,7 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 - 期間: ${stats.label}
 - 記録数: ${stats.mealsCount}食
 - 食費: ${formatMoney(stats.totalMain, stats.mainCurrency)}${stats.mainCurrency === "JPY" ? "" : `（約¥${stats.totalJpy}）`} / 予算 ${formatMoney(stats.budgetMain, stats.mainCurrency)}（${stats.budgetPct}%）
-- 総カロリー: ${stats.calories}kcal
-- PFCカロリー比: タンパク質${stats.pfcPct.protein}% / 脂質${stats.pfcPct.fat}% / 炭水化物${stats.pfcPct.carb}%
-- 塩分合計: ${stats.sodium}mg
+- 栄養の方向感（数値ではなく傾向。この言葉だけで語ること）: ${trendLabels}
 - 食べたもの: ${stats.dishes.slice(0, 12).join("、")}`;
 
     const msg = await client.messages.create({

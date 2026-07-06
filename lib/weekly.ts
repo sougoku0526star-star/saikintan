@@ -22,7 +22,75 @@ export interface PeriodStats {
   carb: number;
   sodium: number;
   pfcPct: { protein: number; fat: number; carb: number };
+  vegetableRatio: number; // 野菜系メニューの出現率 0〜1（方向感用）
+  eatingOutRatio: number; // 外食（＝自炊でない）比率 0〜1（方向感用）
   dishes: string[];
+}
+
+// ---- 栄養の方向感（Trend）------------------------------------------------
+// 「支出は精密・栄養はゆるく」の原則により、栄養は数値を出さず low/ok/high の
+// 方向感だけをAIに渡す。閾値は一般的な目安で「明らかな偏りだけ拾う」。
+
+export type Trend = "low" | "ok" | "high";
+
+export interface NutritionTrend {
+  protein: Trend;
+  fat: Trend;
+  carb: Trend;
+  vegetable: Trend;
+  sodium: Trend;
+  eatingOutRatio: Trend;
+}
+
+// 閾値（根拠コメント付き）。厳密さより方向感。
+const TREND = {
+  // PFCカロリー比（一般的な目安: P 13–20% / F 20–30% / C 50–65%）
+  proteinLowPct: 13,
+  proteinHighPct: 20,
+  fatLowPct: 20,
+  fatHighPct: 35,
+  carbLowPct: 45,
+  carbHighPct: 65,
+  // 1食あたりナトリウム(mg)。日本人の食塩目安 ~6.5g/日 ≒ 1食 ~850mg 前後
+  sodiumLowPerMeal: 500,
+  sodiumHighPerMeal: 1200,
+  // 野菜系メニューの出現率
+  vegLowRatio: 0.15,
+  vegHighRatio: 0.5,
+  // 外食比率
+  eatOutLowRatio: 0.3,
+  eatOutHighRatio: 0.7,
+};
+
+function band(v: number, low: number, high: number): Trend {
+  return v < low ? "low" : v > high ? "high" : "ok";
+}
+
+/** 集計結果を「方向感（low/ok/high）」へ丸める。数値は一切外に出さない。 */
+export function toNutritionTrend(s: PeriodStats): NutritionTrend {
+  const perMealSodium = s.mealsCount ? s.sodium / s.mealsCount : 0;
+  return {
+    protein: band(s.pfcPct.protein, TREND.proteinLowPct, TREND.proteinHighPct),
+    fat: band(s.pfcPct.fat, TREND.fatLowPct, TREND.fatHighPct),
+    carb: band(s.pfcPct.carb, TREND.carbLowPct, TREND.carbHighPct),
+    vegetable: s.mealsCount ? band(s.vegetableRatio, TREND.vegLowRatio, TREND.vegHighRatio) : "ok",
+    sodium: band(perMealSodium, TREND.sodiumLowPerMeal, TREND.sodiumHighPerMeal),
+    eatingOutRatio: band(s.eatingOutRatio, TREND.eatOutLowRatio, TREND.eatOutHighRatio),
+  };
+}
+
+const TREND_JA: Record<Trend, string> = { low: "少なめ", ok: "いい感じ", high: "多め" };
+
+/** 方向感を日本語ラベルに（AIに渡す用）。例: 「タンパク質: いい感じ / 野菜: 少なめ」 */
+export function nutritionTrendLabels(t: NutritionTrend): string {
+  return [
+    `タンパク質: ${TREND_JA[t.protein]}`,
+    `脂質: ${TREND_JA[t.fat]}`,
+    `炭水化物: ${TREND_JA[t.carb]}`,
+    `野菜: ${TREND_JA[t.vegetable]}`,
+    `塩分: ${TREND_JA[t.sodium]}`,
+    `外食: ${TREND_JA[t.eatingOutRatio]}`,
+  ].join(" / ");
 }
 
 function parseISO(iso: string): Date {
@@ -106,8 +174,11 @@ export function aggregatePeriod(
     protein = 0,
     fat = 0,
     carb = 0,
-    sodium = 0;
+    sodium = 0,
+    vegCount = 0,
+    homeCount = 0;
   const dishes: string[] = [];
+  const VEG_RE = /野菜|ベジ|サラダ|グリーン|空芯菜|ほうれん|ブロッコリ|温野菜/;
 
   for (const r of inP) {
     const m = r.meal;
@@ -119,6 +190,15 @@ export function aggregatePeriod(
       carb += m.nutrition.carb || 0;
       sodium += m.nutrition.sodium || 0;
     }
+    // 野菜系：栄養タグ or 料理名から判定
+    if (
+      m.nutritionTags?.some((t) => VEG_RE.test(t.label)) ||
+      VEG_RE.test(m.dishNameJa)
+    ) {
+      vegCount++;
+    }
+    // 自炊判定：日本食品標準成分表（家庭料理）由来を自炊とみなし、それ以外は外食扱い
+    if ((m.source ?? "").includes("日本食品標準成分表")) homeCount++;
     dishes.push(m.dishNameJa);
   }
 
@@ -152,6 +232,8 @@ export function aggregatePeriod(
     carb: round1(carb),
     sodium: Math.round(sodium),
     pfcPct,
+    vegetableRatio: inP.length ? vegCount / inP.length : 0,
+    eatingOutRatio: inP.length ? (inP.length - homeCount) / inP.length : 0,
     dishes,
   };
 }
@@ -162,7 +244,8 @@ export interface WeeklyLetter {
   sign: string;
 }
 
-/** AIキーが無い/失敗時の、集計値からの定型レター。 */
+/** AIキーが無い/失敗時の、集計値からの定型レター。
+ *  栄養は数値を出さず方向感のみ。支出（金額・予算・%）は精密でOK。提案は1個だけ。 */
 export function fallbackLetter(s: PeriodStats): WeeklyLetter {
   const term = s.kind === "week" ? "今週" : "今月";
   const within = s.totalMain <= s.budgetMain;
@@ -170,26 +253,31 @@ export function fallbackLetter(s: PeriodStats): WeeklyLetter {
     s.mainCurrency === "JPY"
       ? formatMoney(s.totalMain, s.mainCurrency)
       : `${formatMoney(s.totalMain, s.mainCurrency)}（約 ¥${s.totalJpy.toLocaleString()}）`;
-  const dominant =
-    s.pfcPct.carb >= s.pfcPct.fat && s.pfcPct.carb >= s.pfcPct.protein
-      ? "炭水化物"
-      : s.pfcPct.fat >= s.pfcPct.protein
-        ? "脂質"
-        : "タンパク質";
-  const avg = s.mealsCount ? Math.round(s.calories / s.mealsCount) : 0;
+  const t = toNutritionTrend(s);
+
+  // 方向感から「気になる1点」を選び、提案は必ず1個だけ添える
+  let noticed: string;
+  if (t.vegetable === "low") {
+    noticed = "お野菜がちょっと少なめだったかな。次はサラダを1皿そえてみよ？";
+  } else if (t.fat === "high") {
+    noticed = "こってり系が多めだったみたい。蒸し・ゆでの一皿を一度はさんでみよ？";
+  } else if (t.sodium === "high") {
+    noticed = "味しっかりめの日が多かったね。スープを半分残すだけでもいい感じだよ。";
+  } else if (t.eatingOutRatio === "high") {
+    noticed = "外食が多めの週だったね。一度だけおうちごはんを入れると、ほっとするよ。";
+  } else if (t.protein === "low") {
+    noticed = "たんぱく質が少なめかも。卵かお豆腐を1品足すと元気が出るよ！";
+  } else {
+    noticed = "全体のバランス、いい感じだったよ。この調子で楽しみながらいこうね。";
+  }
+
   return {
     greeting: `${term}もおつかれさま！`,
     body: [
       `${term}は${s.mealsCount}食を記録してくれたね。食費は ${money}、予算 ${formatMoney(s.budgetMain, s.mainCurrency)} に対して ${s.budgetPct}% だよ。${
         within ? "ちゃんと予算におさまってて、いいペース！僕もうれしいなー。" : "ちょっとだけ予算オーバーかな…無理しない範囲で配分を気にしてみよ？"
       }`,
-      `1食あたり平均 ${avg} kcal。カロリー比だと${dominant}が中心の${term === "今週" ? "一週間" : "一か月"}だったみたい。${
-        dominant === "炭水化物"
-          ? "お野菜やタンパク質の一皿を足すと、もっと彩りよくなるよ！"
-          : dominant === "脂質"
-            ? "揚げ物がつづいたら、蒸し・ゆでの一皿もはさんでみよ？"
-            : "すごくいいバランス！この調子で楽しみながらいこうね。"
-      }`,
+      noticed,
       `遠いところでがんばってる君を、僕はいつも応援してるよ。また次のごはん、楽しみにしてるね！`,
     ],
     sign: "— ごはんくんより",
