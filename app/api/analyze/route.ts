@@ -167,9 +167,22 @@ export async function POST(req: Request) {
       const source = analysis.chain
         ? `${analysis.chain}公式（日本）を参照した${regionLabel(userRegion)}の推定値`
         : undefined;
+
+      // 名前の確定：存在しないslugが返っても dish_name を絶対に捨てない。
+      // 自信が低い(<0.5)ときは「（たぶん）」で不確かさを見せつつ、名前自体は必ず出す。
+      // 両方の名前が空＝写真に料理が無いときだけ「不明な料理」にする。
+      const baseNameJa = analysis.dishNameJa || analysis.dishNameEn;
+      const lowConf = analysis.confidence < 0.5;
+      const nameJa = baseNameJa
+        ? lowConf
+          ? `${baseNameJa}（たぶん）`
+          : baseNameJa
+        : "不明な料理";
+      const nameEn = analysis.dishNameEn || analysis.dishNameJa || "Unknown dish";
+
       const meal = buildMealFromEstimate({
-        name: analysis.dishNameEn || "Unknown dish",
-        nameJa: analysis.dishNameJa || analysis.dishNameEn || "不明な料理",
+        name: nameEn,
+        nameJa,
         calories: analysis.calories,
         protein: analysis.protein,
         fat: analysis.fat,
@@ -187,7 +200,13 @@ export async function POST(req: Request) {
         confidence: analysis.confidence,
       });
     } catch (e) {
-      console.error("vision analyze failed:", e);
+      // Sonnet 5移行の切り分け用：エラーの status / message を必ず出す
+      const err = e as { name?: string; status?: number; message?: string };
+      console.error("vision analyze failed:", {
+        name: err?.name,
+        status: err?.status,
+        message: err?.message,
+      });
       // 失敗時はモックにフォールバック（下へ）
     }
   }
@@ -308,6 +327,11 @@ slug が "none" の場合でも、写真から料理名（英語・日本語）�
 できる限り正確に見積もってください。料理が辞書にあってもなくても、
 これらの推定値は必ず記入してください。
 
+dish_name_ja / dish_name_en は、判定に自信がなくても「最も可能性の高い料理名」を必ず記入すること。
+空文字は禁止。よだれ鶏・口水鶏のような中華料理も、日本語名（例: よだれ鶏）で必ず書くこと。
+写真に食べ物がまったく写っていない場合に限り、dish_name_ja / dish_name_en を空文字にしてよい
+（このとき confidence は 0 にする）。
+
 # 外食チェーンの地域補正
 ${chainRule}
 チェーンでない場合は chain を空文字 '' にしてください。
@@ -325,7 +349,8 @@ ${restaurantReference()}`;
   // 構造化出力（output_config.format）で必ずスキーマ通りのJSONを得る
   const msg = await client.messages.create({
     model: MODEL,
-    max_tokens: 1024,
+    // Sonnet 5の新トークナイザーは日本語で約+30%。切れ防止に 1024→1350
+    max_tokens: 1350,
     system: gohankunSystemPrompt(userName),
     messages: [
       {
@@ -346,7 +371,16 @@ ${restaurantReference()}`;
 
   const textBlock = msg.content.find((b) => b.type === "text");
   const raw = textBlock && "text" in textBlock ? textBlock.text : "{}";
+  // 判定の調査用ログ（AIの生レスポンスと主要フィールド）。
+  console.log("[analyze] raw:", raw);
   const json = JSON.parse(raw);
+  console.log(
+    "[analyze] slug=%s dish_name_ja=%s dish_name_en=%s confidence=%s",
+    json.slug,
+    json.dish_name_ja,
+    json.dish_name_en,
+    json.confidence
+  );
   return {
     slug: String(json.slug ?? "none"),
     portions: Number(json.portions) || 1,

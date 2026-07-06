@@ -115,7 +115,8 @@ ${facts}`;
 
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 500,
+      // Sonnet 5の新トークナイザーは日本語で約+30%。切れ防止に 500→800
+      max_tokens: 800,
       system: gohankunSystemPrompt(me?.nickname ?? me?.username ?? null),
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
       output_config: { format: { type: "json_schema", schema: SCHEMA } },

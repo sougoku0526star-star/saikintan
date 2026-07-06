@@ -114,7 +114,8 @@ ${ctx.profileBlock}
     const client = new Anthropic();
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 300,
+      // Sonnet 5の新トークナイザーは日本語で約+30%。短い出力だが余裕を持たせ 300→400
+      max_tokens: 400,
       system: gohankunSystemPrompt(null),
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
       output_config: { format: { type: "json_schema", schema: SCHEMA } },

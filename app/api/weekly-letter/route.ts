@@ -170,7 +170,8 @@ ${suggestionCtx.profileBlock}
 
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 1000,
+      // Sonnet 5の新トークナイザーは日本語で約+30%。action＋約束で長めなので 1000→1300
+      max_tokens: 1300,
       system: gohankunSystemPrompt(userName),
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
