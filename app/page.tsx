@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import CreatedSection from "@/components/CreatedSection";
 import GohankunHomeMessages from "@/components/GohankunHomeMessages";
+import AskGohankun from "@/components/AskGohankun";
 
 export default function HomePage() {
   return (
@@ -33,6 +34,9 @@ export default function HomePage() {
 
       {/* ごはんくんのあいさつ＋受信箱（未読メッセージは吹き出し表示） */}
       <GohankunHomeMessages />
+
+      {/* ご飯君に今日のごはんを聞く（即時提案・1日3回） */}
+      <AskGohankun />
 
       {/* タイムライン（デモ記録もユーザー記録も同じストアから） */}
       <CreatedSection />
