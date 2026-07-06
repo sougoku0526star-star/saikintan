@@ -1,0 +1,21 @@
+{
+  "city": "Singapore",
+  "currency": "SGD",
+  "actions": [
+    { "kind": "veg_up", "text": "ホーカーの青菜炒め（チンゲン菜／カンコン空芯菜）を一品追加", "cost": "S$3前後" },
+    { "kind": "veg_up", "text": "経済飯（Cai Fan／雑菜飯）で野菜のおかずを2品選ぶ", "cost": "S$4〜5" },
+    { "kind": "veg_up", "text": "ヨントーフー（Yong Tau Foo）で野菜と豆腐を数種えらぶ", "cost": "S$5前後" },
+    { "kind": "veg_up", "text": "スーパー（FairPrice）のカット野菜やサラダを一品足す", "cost": "S$3〜4" },
+    { "kind": "protein_up", "text": "ホーカーの茹で卵や豆腐系サイドを追加", "cost": "S$1〜2" },
+    { "kind": "protein_up", "text": "FairPriceのゆで卵／ギリシャヨーグルトを常備", "cost": "S$3〜6" },
+    { "kind": "protein_up", "text": "チキンライスは蒸し鶏（白鶏）を選んで脂を控えめに", "cost": "同額" },
+    { "kind": "self_cook", "text": "FairPriceの冷凍野菜ミックスで週1の簡単自炊", "cost": "S$4前後" },
+    { "kind": "self_cook", "text": "電子レンジ蒸し野菜＋卵で、火を使わない一品", "cost": "S$3前後" },
+    { "kind": "self_cook", "text": "週末に卵・豆腐・野菜の作り置きをまとめて", "cost": "材料S$10前後" },
+    { "kind": "eating_out_down", "text": "週1回、レストランをホーカーに置き換える", "cost": "差額S$10前後の節約" },
+    { "kind": "eating_out_down", "text": "カフェのランチを経済飯（Cai Fan）に置き換える", "cost": "差額S$8前後" },
+    { "kind": "budget_pace", "text": "今週はカフェ／バブルティーを2回までにしてみる", "cost": "S$10前後の節約" },
+    { "kind": "budget_pace", "text": "飲み物は屋台のコピ／テ（S$1.5前後）に寄せる", "cost": "S$5前後の節約" },
+    { "kind": "budget_pace", "text": "ランチはS$6以内のホーカーに寄せてみる", "cost": "週S$15前後の節約" }
+  ]
+}

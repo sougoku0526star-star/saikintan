@@ -238,10 +238,120 @@ export function aggregatePeriod(
   };
 }
 
+// 提案カテゴリ（機械判定可能に正規化）。約束ループ（P1）で先週提案の達成度を判定する。
+export type ActionKind =
+  | "veg_up"
+  | "protein_up"
+  | "self_cook"
+  | "eating_out_down"
+  | "budget_pace"
+  | "other";
+
+export const ACTION_KINDS: ActionKind[] = [
+  "veg_up",
+  "protein_up",
+  "self_cook",
+  "eating_out_down",
+  "budget_pace",
+  "other",
+];
+
+export interface WeeklyAction {
+  text: string; // 提案文（先週の約束として翌週に提示する用。簡潔に）
+  kind: ActionKind;
+}
+
 export interface WeeklyLetter {
   greeting: string;
   body: string[];
   sign: string;
+  action?: WeeklyAction; // その週の提案（保存・約束ループ用。表示はbody内で行う）
+}
+
+// ---- 約束の達成度判定（P1-2）--------------------------------------------
+// 先週の提案(kind)に対し、先週(prev)→今週(curr)の集計・タグ比較だけで達成度を出す。
+// AIには判定させない（AIは結果の「翻訳」のみ）。判定不能は "unknown"。
+export type PromiseOutcome = "kept" | "partial" | "not_yet" | "unknown";
+
+const vegCount = (s: PeriodStats) => Math.round((s.vegetableRatio || 0) * s.mealsCount);
+
+// 「高いほど良い指標」の差分を kept/partial/not_yet に丸める共通ヘルパー。
+function gradeDelta(delta: number, keptAt: number, partialAt: number): PromiseOutcome {
+  if (delta >= keptAt) return "kept";
+  if (delta >= partialAt) return "partial";
+  return "not_yet";
+}
+
+export function evaluatePromise(
+  kind: ActionKind,
+  prev: PeriodStats,
+  curr: PeriodStats
+): PromiseOutcome {
+  // 記録が少ない週は判定しない（責める材料にしない）
+  if (curr.mealsCount < 3 || prev.mealsCount < 3) return "unknown";
+
+  switch (kind) {
+    case "veg_up":
+      // 野菜系メニューの出現回数の増分（+2でkept, +1でpartial）
+      return gradeDelta(vegCount(curr) - vegCount(prev), 2, 1);
+    case "protein_up":
+      // PFCのたんぱく質比（%ポイント）の増分
+      return gradeDelta(curr.pfcPct.protein - prev.pfcPct.protein, 4, 1);
+    case "self_cook":
+      // 自炊比率（=1-外食比率）の増分
+      return gradeDelta(
+        (1 - curr.eatingOutRatio) - (1 - prev.eatingOutRatio),
+        0.15,
+        0.05
+      );
+    case "eating_out_down":
+      // 外食比率の減少幅（減るほど良い）
+      return gradeDelta(prev.eatingOutRatio - curr.eatingOutRatio, 0.15, 0.05);
+    case "budget_pace":
+      // 予算消化%の改善幅（下がるほど良い）。今週が予算内(<=100%)なら最低でも partial
+      return gradeDelta(
+        prev.budgetPct - curr.budgetPct + (curr.budgetPct <= 100 ? 8 : 0),
+        8,
+        -8
+      );
+    default:
+      return "unknown"; // other は機械判定できない
+  }
+}
+
+// 方向感から「気になる1点」と提案カテゴリを選ぶ。優先順は fallbackLetter と共通。
+// AIが使えない週でも約束ループが回るよう、fallback文と機械判定用kindを同時に返す。
+export function pickNotice(s: PeriodStats): { noticed: string; action: WeeklyAction } {
+  const t = toNutritionTrend(s);
+  if (t.vegetable === "low")
+    return {
+      noticed: "お野菜がちょっと少なめだったかな。次はサラダを1皿そえてみよ？",
+      action: { text: "次の食事に野菜を1品そえる", kind: "veg_up" },
+    };
+  if (t.fat === "high")
+    return {
+      noticed: "こってり系が多めだったみたい。蒸し・ゆでの一皿を一度はさんでみよ？",
+      action: { text: "蒸し・ゆでの一皿をはさむ", kind: "self_cook" },
+    };
+  if (t.sodium === "high")
+    return {
+      noticed: "味しっかりめの日が多かったね。スープを半分残すだけでもいい感じだよ。",
+      action: { text: "スープを半分残す", kind: "other" },
+    };
+  if (t.eatingOutRatio === "high")
+    return {
+      noticed: "外食が多めの週だったね。一度だけおうちごはんを入れると、ほっとするよ。",
+      action: { text: "週に一度おうちごはんを入れる", kind: "eating_out_down" },
+    };
+  if (t.protein === "low")
+    return {
+      noticed: "たんぱく質が少なめかも。卵かお豆腐を1品足すと元気が出るよ！",
+      action: { text: "卵か豆腐を1品足す", kind: "protein_up" },
+    };
+  return {
+    noticed: "全体のバランス、いい感じだったよ。この調子で楽しみながらいこうね。",
+    action: { text: "この調子で楽しみながら続ける", kind: "other" },
+  };
 }
 
 /** AIキーが無い/失敗時の、集計値からの定型レター。
@@ -253,23 +363,9 @@ export function fallbackLetter(s: PeriodStats): WeeklyLetter {
     s.mainCurrency === "JPY"
       ? formatMoney(s.totalMain, s.mainCurrency)
       : `${formatMoney(s.totalMain, s.mainCurrency)}（約 ¥${s.totalJpy.toLocaleString()}）`;
-  const t = toNutritionTrend(s);
 
   // 方向感から「気になる1点」を選び、提案は必ず1個だけ添える
-  let noticed: string;
-  if (t.vegetable === "low") {
-    noticed = "お野菜がちょっと少なめだったかな。次はサラダを1皿そえてみよ？";
-  } else if (t.fat === "high") {
-    noticed = "こってり系が多めだったみたい。蒸し・ゆでの一皿を一度はさんでみよ？";
-  } else if (t.sodium === "high") {
-    noticed = "味しっかりめの日が多かったね。スープを半分残すだけでもいい感じだよ。";
-  } else if (t.eatingOutRatio === "high") {
-    noticed = "外食が多めの週だったね。一度だけおうちごはんを入れると、ほっとするよ。";
-  } else if (t.protein === "low") {
-    noticed = "たんぱく質が少なめかも。卵かお豆腐を1品足すと元気が出るよ！";
-  } else {
-    noticed = "全体のバランス、いい感じだったよ。この調子で楽しみながらいこうね。";
-  }
+  const { noticed, action } = pickNotice(s);
 
   return {
     greeting: `${term}もおつかれさま！`,
@@ -281,5 +377,6 @@ export function fallbackLetter(s: PeriodStats): WeeklyLetter {
       `遠いところでがんばってる君を、僕はいつも応援してるよ。また次のごはん、楽しみにしてるね！`,
     ],
     sign: "— ごはんくんより",
+    action,
   };
 }
