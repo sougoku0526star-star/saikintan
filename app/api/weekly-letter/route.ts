@@ -19,6 +19,10 @@ import { getAuthUser, getUserId } from "@/lib/server/user";
 import { saveWeeklyAction, getWeeklyAction } from "@/lib/server/letters-db";
 import { listRecords } from "@/lib/server/records-db";
 import {
+  SUGGESTION_RULES,
+  buildSuggestionContext,
+} from "@/lib/server/suggestion-context";
+import {
   gohankunSystemPrompt,
   gohankunYou,
   violatesGohankunRules,
@@ -131,6 +135,7 @@ export async function POST(req: Request) {
     const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
     const trendLabels = nutritionTrendLabels(toNutritionTrend(stats));
+    const suggestionCtx = buildSuggestionContext(uid);
     const promise = lastWeekPromise(uid, stats);
     const promiseBlock = promise
       ? `
@@ -146,10 +151,15 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 - 支出（食費・予算・%）は具体的な数値に自然に触れてよい（支出は精密）
 - 栄養について数値（g・kcal・%・mg）は絶対に使わない。方向感の言葉（「少なめ」「いい感じ」「多め」）だけで語る
 - 責めない。サボり気味・栄養が偏っていても、怒らず「寂しがる・心配する」寄り添いトーンで、軽い提案を1つだけ
+- その提案は本文（body）の中で「どこで・何を」まで具体的に述べる（下の「提案のルール」に従う）。action はそれを簡潔に言い直したもの
 - 海外でがんばる${you}に寄り添うあたたかい一言を必ず添える
 - body は2〜3段落、各60〜120字程度。署名は必ず「— ごはんくんより」
 - 最後に action として、この手紙でした提案を1つだけ簡潔に書き出し、kind で分類する
-  （veg_up=野菜 / protein_up=たんぱく質 / self_cook=自炊 / eating_out_down=外食を減らす / budget_pace=予算ペース / other=その他）${promiseBlock}
+  （veg_up=野菜 / protein_up=たんぱく質 / self_cook=自炊 / eating_out_down=外食を減らす / budget_pace=予算ペース / other=その他）
+
+${SUGGESTION_RULES}${promiseBlock}
+
+${suggestionCtx.profileBlock}
 
 # ${term}の集計
 - 期間: ${stats.label}
