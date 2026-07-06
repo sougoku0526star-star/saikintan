@@ -23,6 +23,7 @@ import Badge from "./Badge";
 import MacroBar from "./MacroBar";
 import MealEditForm from "./MealEditForm";
 import ShareSheet from "./ShareSheet";
+import MemoryLetterCard from "./MemoryLetterCard";
 
 const PORTION_PRESETS = [0.5, 0.75, 1, 1.5, 2];
 
@@ -185,6 +186,14 @@ export default function JournalContent({
         </p>
         <p className="mt-3 text-right text-[11px] text-ink/35">{dateLabel}</p>
       </div>
+
+      {/* 思い出レター（ごはんくんからの手紙） */}
+      <MemoryLetterCard
+        meal={meal}
+        recordId={recordId}
+        editable={editable}
+        onChange={onChange}
+      />
 
       {/* 思い出の写真（任意・友人や風景など） */}
       {meal.memoryPhoto && (
