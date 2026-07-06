@@ -61,8 +61,9 @@ interface AnalyzeBody {
   exifCoords?: { lat: number; lng: number }; // 写真EXIFのGPS（あれば優先）
 }
 
-// 既定は最も高性能な Opus 4.8（高解像度ビジョン対応）。
-const MODEL = process.env.ANALYZE_MODEL || "claude-opus-4-8";
+// 写真解析（ビジョン）用モデル。既定はコスト最適化のためSonnet。
+// 料理判定の精度がSonnetで落ちる場合は ANALYZE_MODEL=claude-opus-4-8 で上書きできる。
+const MODEL = process.env.ANALYZE_MODEL || "claude-sonnet-5";
 
 type SupportedMedia = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 function toMedia(mime?: string): SupportedMedia {

@@ -17,7 +17,8 @@ import { formatMoney } from "@/lib/currency";
 
 export const runtime = "nodejs";
 
-const MODEL = process.env.ANALYZE_MODEL || "claude-opus-4-8";
+// レター・コメント生成用モデル。広告+Exitモデルの原価設計に合わせ既定はSonnet。
+const MODEL = process.env.LETTER_MODEL || "claude-sonnet-5";
 
 const SCHEMA = {
   type: "object",
