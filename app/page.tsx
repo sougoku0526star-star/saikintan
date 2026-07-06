@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import CreatedSection from "@/components/CreatedSection";
-import GohankunWidget from "@/components/GohankunWidget";
+import GohankunHomeMessages from "@/components/GohankunHomeMessages";
 
 export default function HomePage() {
   return (
@@ -31,10 +31,8 @@ export default function HomePage() {
         </Link>
       </header>
 
-      {/* ごはんくんのあいさつ（歌ってごきげん・ピョコピョコ跳ねる） */}
-      <div className="mb-7">
-        <GohankunWidget state="welcome" size="sm" />
-      </div>
+      {/* ごはんくんのあいさつ＋受信箱（未読メッセージは吹き出し表示） */}
+      <GohankunHomeMessages />
 
       {/* タイムライン（デモ記録もユーザー記録も同じストアから） */}
       <CreatedSection />

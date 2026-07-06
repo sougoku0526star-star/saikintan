@@ -15,21 +15,9 @@ import {
   monthStartISO,
   toNutritionTrend,
 } from "../weekly";
+import type { GohankunMessage, GohankunMessageKind } from "../gohankun-messages";
 
-export type GohankunMessageKind =
-  | "record_reminder" // 記録リマインド（寂しがり）
-  | "weekly_ready" // 週次レター完成
-  | "budget_alert" // 予算ペース警告
-  | "praise"; // ポジティブ収穫（見返りなし）
-
-export interface GohankunMessage {
-  id: string;
-  kind: GohankunMessageKind;
-  text: string; // ご飯君の台詞（手書きプールから選択）
-  createdAt: string; // ISO
-  read: boolean;
-  cta?: { label: string; href: string };
-}
+export type { GohankunMessage, GohankunMessageKind };
 
 // ---- 台詞プール（この温度で。種類ごとに6〜10本）--------------------------
 const RECORD_REMINDER = [
