@@ -1,7 +1,13 @@
 // デジタルフォトブックの組み立てロジック（純粋関数・DOM非依存）。
 import type { CreatedEntry } from "./created-store";
+import type { MemoryLetter } from "./mock-data";
 import type { GohankunState } from "@/components/GohankunWidget";
 
+// 「memory」概念の整理（P1-4）:
+//  - BookPhoto.kind:"memory" … その記録の memoryPhoto（食事以外の思い出写真1枚）の“写真種別”。
+//  - MealEntry.isMemory / memoryLetter … 「思い出にする」で綴るごはんくんの“手紙”機能（P1）。
+//  両者は別軸で、二重定義ではない。ある日に「思い出写真だけ」「手紙だけ」「両方」いずれも起こりうる。
+//  手紙がある日は、まとめコメント(daySummary)の代わりに手紙本文を Spread.comment に流し込む。
 export interface BookPhoto {
   src: string;
   label: string;
@@ -13,8 +19,16 @@ export interface Spread {
   dateLabel: string;
   location: string; // その日の代表的な場所（編集キャプション用）
   photos: BookPhoto[]; // 1〜4枚
-  comment: string; // ごはんくんのまとめコメント（1〜2行）
+  comment: string; // ごはんくんのまとめコメント（1〜2行）or その日の思い出レター本文
+  fromMemoryLetter: boolean; // comment が思い出レター由来なら true（描画側で見せ方を変えられる）
   mascot: GohankunState;
+}
+
+// 思い出レターを見開きコメント用の1文字列にまとめる。本文（＝手紙の核）を優先し、
+// 本文が空なら書き出しを使う。署名はコメントには載せない。
+function memoryLetterComment(letter: MemoryLetter): string {
+  const body = letter.body.map((p) => p.trim()).filter(Boolean);
+  return (body.length ? body : [letter.greeting]).join("　");
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -83,6 +97,8 @@ export function buildSpreads(
     const photos: BookPhoto[] = [];
     const dishes: string[] = [];
     let hasMemory = false;
+    // その日の思い出レター（編集済みを優先）。あればまとめコメントの代わりに使う。
+    let dayLetter: MemoryLetter | undefined;
     for (const e of entries) {
       if (e.meal.photo) {
         photos.push({ src: e.meal.photo, label: e.meal.dishNameJa, kind: "food" });
@@ -91,6 +107,10 @@ export function buildSpreads(
       if (e.meal.memoryPhoto) {
         photos.push({ src: e.meal.memoryPhoto, label: "思い出の一枚", kind: "memory" });
         hasMemory = true;
+      }
+      const lt = e.meal.memoryLetter;
+      if (lt && (!dayLetter || (lt.edited && !dayLetter.edited))) {
+        dayLetter = lt; // 未設定なら採用、既存が未編集で新規が編集済みなら差し替え
       }
     }
     photoCount += photos.length;
@@ -103,7 +123,10 @@ export function buildSpreads(
       day: "numeric",
       weekday: "short",
     });
-    const comment = daySummary(day, dishes, hasMemory, nick);
+    const fromMemoryLetter = !!dayLetter;
+    const comment = dayLetter
+      ? memoryLetterComment(dayLetter)
+      : daySummary(day, dishes, hasMemory, nick);
 
     // 1見開き最大4枚。多い日は複数見開きに分割。
     for (let i = 0; i < photos.length; i += 4) {
@@ -113,6 +136,7 @@ export function buildSpreads(
         location,
         photos: photos.slice(i, i + 4),
         comment,
+        fromMemoryLetter,
         mascot: MASCOTS[spreadIndex % MASCOTS.length],
       });
       spreadIndex++;
