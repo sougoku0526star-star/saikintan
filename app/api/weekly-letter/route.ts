@@ -5,20 +5,59 @@ import {
   pickNotice,
   toNutritionTrend,
   nutritionTrendLabels,
+  aggregatePeriod,
+  evaluatePromise,
+  shiftWeek,
   ACTION_KINDS,
   type ActionKind,
   type PeriodStats,
+  type PromiseOutcome,
   type WeeklyAction,
   type WeeklyLetter,
 } from "@/lib/weekly";
 import { getAuthUser, getUserId } from "@/lib/server/user";
-import { saveWeeklyAction } from "@/lib/server/letters-db";
+import { saveWeeklyAction, getWeeklyAction } from "@/lib/server/letters-db";
+import { listRecords } from "@/lib/server/records-db";
 import {
   gohankunSystemPrompt,
   gohankunYou,
   violatesGohankunRules,
 } from "@/lib/server/gohankun-persona";
-import { formatMoney } from "@/lib/currency";
+import { formatMoney, FALLBACK_RATES_TO_JPY } from "@/lib/currency";
+
+// 先週の約束（提案）に対する達成度を、集計比較で機械判定する（AIは判定しない）。
+// unknown（判定不能）は null にして、レターで触れさせない。
+function lastWeekPromise(
+  uid: string,
+  stats: PeriodStats
+): { text: string; outcome: Exclude<PromiseOutcome, "unknown"> } | null {
+  if (stats.kind !== "week") return null;
+  const prevWeekStart = shiftWeek(stats.start, -1);
+  const prev = getWeeklyAction(uid, prevWeekStart);
+  if (!prev) return null;
+  // 今週(stats)と同じ換算レートで先週を集計する
+  const rateMain =
+    stats.totalMain > 0
+      ? stats.totalJpy / stats.totalMain
+      : FALLBACK_RATES_TO_JPY[stats.mainCurrency] ?? 1;
+  const prevStats = aggregatePeriod(
+    listRecords(uid),
+    "week",
+    prevWeekStart,
+    stats.budgetMain,
+    stats.mainCurrency,
+    rateMain
+  );
+  const outcome = evaluatePromise(prev.kind, prevStats, stats);
+  if (outcome === "unknown") return null;
+  return { text: prev.text, outcome };
+}
+
+const OUTCOME_GUIDANCE: Record<Exclude<PromiseOutcome, "unknown">, string> = {
+  kept: "kept（達成）→ 冒頭で具体的に、心から喜ぶ。「ちゃんと見てたよ！」の温度で。",
+  partial: "partial（あと一歩）→ 前向きに認めてねぎらう。できた部分をちゃんと拾う。",
+  not_yet: "not_yet（まだ）→ 絶対に責めない。「またいつでもいいよ！」と軽く受け流す。",
+};
 
 export const runtime = "nodejs";
 
@@ -92,6 +131,14 @@ export async function POST(req: Request) {
     const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
     const trendLabels = nutritionTrendLabels(toNutritionTrend(stats));
+    const promise = lastWeekPromise(uid, stats);
+    const promiseBlock = promise
+      ? `
+
+# 先週の約束（この結果に必ず自然に触れること）
+先週の提案: 「${promise.text}」
+結果: ${OUTCOME_GUIDANCE[promise.outcome]}`
+      : "";
     const prompt = `${you}の${term}の食事記録の集計だよ。これをもとに、ごはんくんから
 ${you}へ、あたたかく前向きな短い手紙を日本語で書いてください。
 
@@ -102,7 +149,7 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 - 海外でがんばる${you}に寄り添うあたたかい一言を必ず添える
 - body は2〜3段落、各60〜120字程度。署名は必ず「— ごはんくんより」
 - 最後に action として、この手紙でした提案を1つだけ簡潔に書き出し、kind で分類する
-  （veg_up=野菜 / protein_up=たんぱく質 / self_cook=自炊 / eating_out_down=外食を減らす / budget_pace=予算ペース / other=その他）
+  （veg_up=野菜 / protein_up=たんぱく質 / self_cook=自炊 / eating_out_down=外食を減らす / budget_pace=予算ペース / other=その他）${promiseBlock}
 
 # ${term}の集計
 - 期間: ${stats.label}
