@@ -128,6 +128,16 @@ export function getDb(): DatabaseSync {
       count   INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (user_id, action, ymd)
     );
+
+    -- 週次レターの永続化（約束ループP1）。週ごとに提案(action)を保存し、翌週に達成度を照合する。
+    CREATE TABLE IF NOT EXISTS weekly_letters (
+      user_id     TEXT    NOT NULL,
+      week_start  TEXT    NOT NULL,
+      action_text TEXT,
+      action_kind TEXT,
+      created_at  INTEGER NOT NULL,
+      PRIMARY KEY (user_id, week_start)
+    );
   `);
 
   // 既存DBへの追加カラム（無ければ足す。あればエラーを握りつぶす）

@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   fallbackLetter,
+  pickNotice,
   toNutritionTrend,
   nutritionTrendLabels,
+  ACTION_KINDS,
+  type ActionKind,
   type PeriodStats,
+  type WeeklyAction,
   type WeeklyLetter,
 } from "@/lib/weekly";
-import { getAuthUser } from "@/lib/server/user";
+import { getAuthUser, getUserId } from "@/lib/server/user";
+import { saveWeeklyAction } from "@/lib/server/letters-db";
 import {
   gohankunSystemPrompt,
   gohankunYou,
@@ -30,10 +35,28 @@ const SCHEMA = {
       description: "ごはんくんからの本文（2〜3段落）",
     },
     sign: { type: "string", description: "署名（必ず「— ごはんくんより」）" },
+    action: {
+      type: "object",
+      description: "この手紙でした提案を機械可読に。翌週「先週の約束」として提示する",
+      properties: {
+        text: { type: "string", description: "提案を簡潔に1つ（例: 次の食事に青菜を1品）" },
+        kind: { type: "string", enum: [...ACTION_KINDS], description: "提案の分類" },
+      },
+      required: ["text", "kind"],
+      additionalProperties: false,
+    },
   },
-  required: ["greeting", "body", "sign"],
+  required: ["greeting", "body", "sign", "action"],
   additionalProperties: false,
 } as const;
+
+function parseAction(raw: unknown): WeeklyAction | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as { text?: unknown; kind?: unknown };
+  if (typeof o.text !== "string" || !o.text.trim()) return null;
+  const kind = ACTION_KINDS.includes(o.kind as ActionKind) ? (o.kind as ActionKind) : "other";
+  return { text: o.text.trim(), kind };
+}
 
 export async function POST(req: Request) {
   let stats: PeriodStats;
@@ -43,9 +66,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
+  const uid = getUserId();
+  // 週の提案を保存（約束ループP1）。週かつ記録ありのときだけ。
+  const persistWeek = (letter: WeeklyLetter) => {
+    if (stats.kind === "week" && stats.mealsCount > 0 && letter.action) {
+      try {
+        saveWeeklyAction(uid, stats.start, letter.action);
+      } catch (e) {
+        console.error("saveWeeklyAction failed:", e);
+      }
+    }
+  };
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || stats.mealsCount === 0) {
-    return NextResponse.json({ letter: fallbackLetter(stats), source: "fallback" });
+    const letter = fallbackLetter(stats);
+    persistWeek(letter);
+    return NextResponse.json({ letter, source: "fallback" });
   }
 
   try {
@@ -64,6 +101,8 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 - 責めない。サボり気味・栄養が偏っていても、怒らず「寂しがる・心配する」寄り添いトーンで、軽い提案を1つだけ
 - 海外でがんばる${you}に寄り添うあたたかい一言を必ず添える
 - body は2〜3段落、各60〜120字程度。署名は必ず「— ごはんくんより」
+- 最後に action として、この手紙でした提案を1つだけ簡潔に書き出し、kind で分類する
+  （veg_up=野菜 / protein_up=たんぱく質 / self_cook=自炊 / eating_out_down=外食を減らす / budget_pace=予算ペース / other=その他）
 
 # ${term}の集計
 - 期間: ${stats.label}
@@ -74,7 +113,7 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
 
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 700,
+      max_tokens: 1000,
       system: gohankunSystemPrompt(userName),
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
       output_config: { format: { type: "json_schema", schema: SCHEMA } },
@@ -87,6 +126,8 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
       greeting: String(json.greeting ?? ""),
       body: Array.isArray(json.body) ? json.body.map(String) : [],
       sign: String(json.sign ?? "— ごはんくんより"),
+      // AIが分類した提案。欠落/不正なら方向感から機械的に導く
+      action: parseAction(json.action) ?? pickNotice(stats).action,
     };
     if (!letter.greeting || letter.body.length === 0) throw new Error("empty letter");
     // 出力側の機械チェック：禁止ワード/栄養の生数値が混じったら fallback に落とす
@@ -95,9 +136,12 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
     ) {
       throw new Error("letter violates gohankun rules");
     }
+    persistWeek(letter);
     return NextResponse.json({ letter, source: "ai" });
   } catch (e) {
     console.error("weekly-letter failed:", e);
-    return NextResponse.json({ letter: fallbackLetter(stats), source: "fallback" });
+    const letter = fallbackLetter(stats);
+    persistWeek(letter);
+    return NextResponse.json({ letter, source: "fallback" });
   }
 }
