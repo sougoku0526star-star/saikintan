@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fallbackLetter, type PeriodStats, type WeeklyLetter } from "@/lib/weekly";
 import { getAuthUser } from "@/lib/server/user";
-import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
+import {
+  gohankunSystemPrompt,
+  gohankunYou,
+  violatesGohankunRules,
+} from "@/lib/server/gohankun-persona";
 import { formatMoney } from "@/lib/currency";
 
 export const runtime = "nodejs";
@@ -78,6 +82,12 @@ ${you}へ、あたたかく前向きな短い手紙を日本語で書いてく�
       sign: String(json.sign ?? "— ごはんくんより"),
     };
     if (!letter.greeting || letter.body.length === 0) throw new Error("empty letter");
+    // 出力側の機械チェック：禁止ワード/栄養の生数値が混じったら fallback に落とす
+    if (
+      [letter.greeting, ...letter.body, letter.sign].some(violatesGohankunRules)
+    ) {
+      throw new Error("letter violates gohankun rules");
+    }
     return NextResponse.json({ letter, source: "ai" });
   } catch (e) {
     console.error("weekly-letter failed:", e);

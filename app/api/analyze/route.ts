@@ -15,7 +15,14 @@ import { listFoods } from "@/lib/server/db";
 import { getSettings } from "@/lib/server/settings-db";
 import { currencyToRegion, regionLabel, type RegionCode } from "@/lib/region";
 import { MAPBOX_TOKEN } from "@/lib/mapbox";
-import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
+import {
+  gohankunSystemPrompt,
+  gohankunYou,
+  violatesGohankunRules,
+} from "@/lib/server/gohankun-persona";
+
+// コメントが禁止事項に触れたときの安全な差し替え文（数値・体重言及なし）。
+const SAFE_CAPTION = "今日のごはん、ちゃんと記録できたね。ゆっくり味わえたかな？";
 
 // 場所名 → 座標（Mapbox Geocoding、シンガポール近傍を優先）
 async function geocode(
@@ -108,6 +115,11 @@ export async function POST(req: Request) {
         userName,
         userRegion
       );
+
+      // 出力側の機械チェック：コメントに禁止ワード/栄養の生数値があれば安全な定型に差し替え
+      if (violatesGohankunRules(analysis.caption)) {
+        analysis.caption = SAFE_CAPTION;
+      }
 
       // 位置：写真EXIFのGPSがあれば優先、無ければ場所名をジオコーディング
       const coords =
