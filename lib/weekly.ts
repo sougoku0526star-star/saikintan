@@ -268,6 +268,57 @@ export interface WeeklyLetter {
   action?: WeeklyAction; // その週の提案（保存・約束ループ用。表示はbody内で行う）
 }
 
+// ---- 約束の達成度判定（P1-2）--------------------------------------------
+// 先週の提案(kind)に対し、先週(prev)→今週(curr)の集計・タグ比較だけで達成度を出す。
+// AIには判定させない（AIは結果の「翻訳」のみ）。判定不能は "unknown"。
+export type PromiseOutcome = "kept" | "partial" | "not_yet" | "unknown";
+
+const vegCount = (s: PeriodStats) => Math.round((s.vegetableRatio || 0) * s.mealsCount);
+
+// 「高いほど良い指標」の差分を kept/partial/not_yet に丸める共通ヘルパー。
+function gradeDelta(delta: number, keptAt: number, partialAt: number): PromiseOutcome {
+  if (delta >= keptAt) return "kept";
+  if (delta >= partialAt) return "partial";
+  return "not_yet";
+}
+
+export function evaluatePromise(
+  kind: ActionKind,
+  prev: PeriodStats,
+  curr: PeriodStats
+): PromiseOutcome {
+  // 記録が少ない週は判定しない（責める材料にしない）
+  if (curr.mealsCount < 3 || prev.mealsCount < 3) return "unknown";
+
+  switch (kind) {
+    case "veg_up":
+      // 野菜系メニューの出現回数の増分（+2でkept, +1でpartial）
+      return gradeDelta(vegCount(curr) - vegCount(prev), 2, 1);
+    case "protein_up":
+      // PFCのたんぱく質比（%ポイント）の増分
+      return gradeDelta(curr.pfcPct.protein - prev.pfcPct.protein, 4, 1);
+    case "self_cook":
+      // 自炊比率（=1-外食比率）の増分
+      return gradeDelta(
+        (1 - curr.eatingOutRatio) - (1 - prev.eatingOutRatio),
+        0.15,
+        0.05
+      );
+    case "eating_out_down":
+      // 外食比率の減少幅（減るほど良い）
+      return gradeDelta(prev.eatingOutRatio - curr.eatingOutRatio, 0.15, 0.05);
+    case "budget_pace":
+      // 予算消化%の改善幅（下がるほど良い）。今週が予算内(<=100%)なら最低でも partial
+      return gradeDelta(
+        prev.budgetPct - curr.budgetPct + (curr.budgetPct <= 100 ? 8 : 0),
+        8,
+        -8
+      );
+    default:
+      return "unknown"; // other は機械判定できない
+  }
+}
+
 // 方向感から「気になる1点」と提案カテゴリを選ぶ。優先順は fallbackLetter と共通。
 // AIが使えない週でも約束ループが回るよう、fallback文と機械判定用kindを同時に返す。
 export function pickNotice(s: PeriodStats): { noticed: string; action: WeeklyAction } {
