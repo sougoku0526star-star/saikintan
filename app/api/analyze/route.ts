@@ -15,7 +15,14 @@ import { listFoods } from "@/lib/server/db";
 import { getSettings } from "@/lib/server/settings-db";
 import { currencyToRegion, regionLabel, type RegionCode } from "@/lib/region";
 import { MAPBOX_TOKEN } from "@/lib/mapbox";
-import { gohankunSystemPrompt, gohankunYou } from "@/lib/server/gohankun-persona";
+import {
+  gohankunSystemPrompt,
+  gohankunYou,
+  violatesGohankunRules,
+} from "@/lib/server/gohankun-persona";
+
+// コメントが禁止事項に触れたときの安全な差し替え文（数値・体重言及なし）。
+const SAFE_CAPTION = "今日のごはん、ちゃんと記録できたね。ゆっくり味わえたかな？";
 
 // 場所名 → 座標（Mapbox Geocoding、シンガポール近傍を優先）
 async function geocode(
@@ -54,8 +61,9 @@ interface AnalyzeBody {
   exifCoords?: { lat: number; lng: number }; // 写真EXIFのGPS（あれば優先）
 }
 
-// 既定は最も高性能な Opus 4.8（高解像度ビジョン対応）。
-const MODEL = process.env.ANALYZE_MODEL || "claude-opus-4-8";
+// 写真解析（ビジョン）用モデル。既定はコスト最適化のためSonnet。
+// 料理判定の精度がSonnetで落ちる場合は ANALYZE_MODEL=claude-opus-4-8 で上書きできる。
+const MODEL = process.env.ANALYZE_MODEL || "claude-sonnet-5";
 
 type SupportedMedia = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 function toMedia(mime?: string): SupportedMedia {
@@ -108,6 +116,11 @@ export async function POST(req: Request) {
         userName,
         userRegion
       );
+
+      // 出力側の機械チェック：コメントに禁止ワード/栄養の生数値があれば安全な定型に差し替え
+      if (violatesGohankunRules(analysis.caption)) {
+        analysis.caption = SAFE_CAPTION;
+      }
 
       // 位置：写真EXIFのGPSがあれば優先、無ければ場所名をジオコーディング
       const coords =
