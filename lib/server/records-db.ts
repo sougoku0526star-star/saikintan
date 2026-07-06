@@ -45,6 +45,14 @@ export function listRecords(userId: string): RecordEntry[] {
   return rows.map((r) => JSON.parse(r.data) as RecordEntry);
 }
 
+export function getRecord(userId: string, id: string): RecordEntry | undefined {
+  seedIfNeeded(userId);
+  const row = getDb()
+    .prepare("SELECT data FROM meal_records WHERE user_id = ? AND id = ?")
+    .get(userId, id) as { data: string } | undefined;
+  return row ? (JSON.parse(row.data) as RecordEntry) : undefined;
+}
+
 export function upsertRecord(userId: string, rec: RecordEntry): RecordEntry {
   // シードは「触った」とみなして二度と再投入しない
   seedIfNeeded(userId);
