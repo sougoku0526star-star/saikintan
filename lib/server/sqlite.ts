@@ -104,6 +104,30 @@ export function getDb(): DatabaseSync {
       created_at INTEGER NOT NULL,
       UNIQUE(image_id, user_id)
     );
+
+    -- ご飯君が「向こうから話しかける」アプリ内メッセージ（P0）。台詞は手書きプールから選択（AI不使用）。
+    -- ref は重複配信を防ぐ冪等キー（例: weekly_ready→週開始日 / praise→週開始日 / farewell）。
+    CREATE TABLE IF NOT EXISTS gohankun_messages (
+      user_id    TEXT    NOT NULL,
+      id         TEXT    NOT NULL,
+      kind       TEXT    NOT NULL,
+      text       TEXT    NOT NULL,
+      created_at INTEGER NOT NULL,
+      read       INTEGER NOT NULL DEFAULT 0,
+      cta_label  TEXT,
+      cta_href   TEXT,
+      ref        TEXT,
+      PRIMARY KEY (user_id, id)
+    );
+
+    -- AI呼び出しのレート制限カウンタ（P3「ご飯君に聞く」1日3回など）。ymd=YYYY-MM-DD。
+    CREATE TABLE IF NOT EXISTS ai_rate_limit (
+      user_id TEXT    NOT NULL,
+      action  TEXT    NOT NULL,
+      ymd     TEXT    NOT NULL,
+      count   INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, action, ymd)
+    );
   `);
 
   // 既存DBへの追加カラム（無ければ足す。あればエラーを握りつぶす）
