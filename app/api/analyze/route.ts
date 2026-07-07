@@ -61,6 +61,7 @@ interface AnalyzeBody {
   foodId?: number;
   portions?: number;
   exifCoords?: { lat: number; lng: number }; // 写真EXIFのGPS（あれば優先）
+  dish_name_hint?: string; // ユーザーの料理名申告（任意）。あれば同定はこれが正
 }
 
 // 写真解析（ビジョン）用モデル。既定はコスト最適化のためSonnet。
@@ -100,9 +101,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ meal, source: "lookup" });
   }
 
-  // --- 2) 実写真：Claude Visionで「100品のどれか」に分類 + 分量推定 ----
+  // --- 2) 解析：写真＋料理名(hint)のハイブリッド。呼び出しは常に1回だけ。 ----
+  // 写真あり／hintのみ（写真なし）／写真のみ、いずれも同じAPIで処理する。
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (body.imageBase64 && apiKey) {
+  const hint = String(body.dish_name_hint ?? "").trim();
+  if ((body.imageBase64 || hint) && apiKey) {
     try {
       // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
       const uid = getUserId();
@@ -112,11 +115,12 @@ export async function POST(req: Request) {
       // ユーザーの地域（メイン通貨から推定）。チェーン料理の地域補正に使う。
       const userRegion = currencyToRegion(getSettings(uid).mainCurrency);
       const analysis = await analyzeWithClaude(
-        body.imageBase64,
+        body.imageBase64 ?? null,
         toMedia(body.mimeType),
         userFoods,
         userName,
-        userRegion
+        userRegion,
+        hint
       );
 
       // 出力側の機械チェック：コメントに禁止ワード/栄養の生数値があれば安全な定型に差し替え
@@ -265,14 +269,16 @@ const RESULT_SCHEMA = {
 } as const;
 
 async function analyzeWithClaude(
-  imageBase64: string,
+  imageBase64: string | null,
   mediaType: SupportedMedia,
   userFoods: UserFoodLite[] = [],
   userName: string | null = null,
-  userRegion: RegionCode = "SG"
+  userRegion: RegionCode = "SG",
+  hint: string = ""
 ): Promise<VisionResult> {
   const client = new Anthropic(); // ANTHROPIC_API_KEY を環境から自動取得
   const you = gohankunYou(userName);
+  const hasImage = !!imageBase64;
 
   const standardList = foodTaxonomy()
     .map((t) => `${t.slug}\t${t.name}`)
@@ -294,28 +300,52 @@ async function analyzeWithClaude(
 slug は "none"、dish_name_* に料理名、calories/protein/fat/carb/sodium に${regionJa}向けの推定値、
 chain にチェーン名（例: マクドナルド）を入れて返してください。地域差が不明なら日本公式値に近い値で構いません。`;
 
-  const prompt = `次の食事写真を分析してください。料理の判定と栄養の数値は、空想ではなく
+  // ユーザーの申告（hint）があれば、料理の同定は申告を正とする（写真は量・シーン担当）。
+  const hintSection = hint
+    ? `
+
+# ユーザーの申告（最優先）
+ユーザーはこの食事を「${hint}」と申告しています。以下のルールに従うこと:
+- 料理の同定はこの申告が正。写真の見た目と矛盾しても申告を優先する
+- 写真は量(portions)・付け合わせの把握・全体のシーン理解にのみ使う
+- 申告が定食・セット名（例: 焼き魚定食）の場合、写真を参照して構成品目（主菜・ご飯・汁物・小鉢等）に分解し、items配列に個別に列挙する
+- 申告に対応するslugが料理リストにあればそれを使い、なければ slug: "none" で栄養推定値を返す
+- 申告と写真が明らかに別物の場合（例: 申告「ラーメン」で写真がケーキ）でも申告を優先しつつ、confidenceを0.3以下にする`
+    : "";
+
+  const opener = hasImage
+    ? "次の食事写真を分析してください。"
+    : "写真はありません。ユーザーの料理名の申告だけから推定してください。";
+  const enumRule = hasImage
+    ? `写真に写っている料理・小鉢・汁物・主食を「全て個別に」 items 配列に列挙してください。
+定食は主菜・ご飯・味噌汁・小鉢…のように1品ずつ分解します（主菜を先頭に）。
+調味料（わさび・大根おろし・醤油・レモン等）は栄養が僅少なので除外して構いません。`
+    : `料理名から標準的な一食分の構成と栄養を推定してください。
+定食・セット名なら構成品目（主菜・ご飯・汁物・小鉢等）に分解して items に個別列挙、単品ならその1品だけを items に入れます（主菜を先頭に）。`;
+  const captionRule = hasImage
+    ? `キャラクター「ごはんくん」として${you}に語りかける日記風コメント（system の人格・口調に従う）。`
+    : `キャラクター「ごはんくん」として${you}に語りかける日記風コメント。写真が無くても「写真がなくても、◯◯食べたんだね！」のような温かいトーンでよい。`;
+  const noFoodRule = hasImage
+    ? `\n写真に食べ物がまったく写っていない場合に限り、items を1要素にして dish_name を空文字・栄養0・confidence 0 にしてください。`
+    : "";
+
+  const prompt = `${opener}料理の判定と栄養の数値は、空想ではなく
 現実的で正確に見積もること（ここはプロの栄養士として厳密に）。
 
 # 品目の列挙（重要）
-写真に写っている料理・小鉢・汁物・主食を「全て個別に」 items 配列に列挙してください。
-定食は主菜・ご飯・味噌汁・小鉢…のように1品ずつ分解します（主菜を先頭に）。
-調味料（わさび・大根おろし・醤油・レモン等）は栄養が僅少なので除外して構いません。
+${enumRule}
 各品目について、下の2つのリストに該当があれば slug を、無ければ slug を "none" にして
 その品目の栄養推定値（カロリー・タンパク質・脂質・炭水化物・塩分）を記入します。
 まず「あなたの辞書」を優先的に照合し、無ければ「標準の料理リスト」を見ます。
 
 各品目の dish_name_ja / dish_name_en は、自信がなくても「最も可能性の高い料理名」を必ず記入。
-空文字は禁止。よだれ鶏・口水鶏のような中華料理も、日本語名（例: よだれ鶏）で必ず書くこと。
-写真に食べ物がまったく写っていない場合に限り、items を1要素にして dish_name を空文字・
-栄養0・confidence 0 にしてください。
+空文字は禁止。よだれ鶏・口水鶏のような中華料理も、日本語名（例: よだれ鶏）で必ず書くこと。${noFoodRule}${hintSection}
 
 # 外食チェーンの地域補正
 ${chainRule}
 チェーンでない場合は chain を空文字 '' にしてください。
 
-ただし caption フィールドだけは、キャラクター「ごはんくん」として
-${you}に語りかける日記風コメントを書いてください（system の人格・口調に従う）。
+caption フィールドは、${captionRule}
 ${userSection}
 
 # 標準の料理リスト（slug<TAB>料理名）
@@ -324,24 +354,24 @@ ${standardList}
 # チェーン参照リスト（日本公式値。slug<TAB>チェーン 料理名<TAB>栄養）
 ${restaurantReference()}`;
 
+  // 写真があれば画像ブロックを含め、hintのみ（写真なし）はテキストだけ送る（トークン節約）
+  const content: Anthropic.ContentBlockParam[] = [];
+  if (imageBase64) {
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: mediaType, data: imageBase64 },
+    });
+  }
+  content.push({ type: "text", text: prompt });
+
   // 構造化出力（output_config.format）で必ずスキーマ通りのJSONを得る
   const msg = await client.messages.create({
     model: MODEL,
-    // 複数品目（最大8品×栄養）＋日本語（Sonnet 5で約+30%）で出力が長い。切れ防止に余裕を持たせる
-    max_tokens: 2800,
+    // 最大8品×栄養＋caption、日本語（Sonnet 5で約+30%）で出力が長い。
+    // 申告と写真が食い違う難ケースでは品目が増えがちなので余裕を持たせる。
+    max_tokens: 4000,
     system: gohankunSystemPrompt(userName),
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mediaType, data: imageBase64 },
-          },
-          { type: "text", text: prompt },
-        ],
-      },
-    ],
+    messages: [{ role: "user", content }],
     output_config: {
       format: { type: "json_schema", schema: RESULT_SCHEMA },
     },
