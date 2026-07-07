@@ -16,6 +16,7 @@ export interface ServerUserFood {
   carb: number;
   sodium: number;
   addedAt: number;
+  uses: number;
 }
 
 function slugify(name: string): string {
@@ -37,6 +38,7 @@ interface Row {
   carb: number;
   sodium: number;
   added_at: number;
+  uses: number;
 }
 
 function toFood(r: Row): ServerUserFood {
@@ -51,14 +53,15 @@ function toFood(r: Row): ServerUserFood {
     carb: r.carb,
     sodium: r.sodium,
     addedAt: r.added_at,
+    uses: r.uses ?? 1,
   };
 }
 
 export function listFoods(userId: string): ServerUserFood[] {
   const rows = db()
     .prepare(
-      `SELECT slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at
-       FROM user_foods WHERE user_id = ? ORDER BY added_at DESC`
+      `SELECT slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at,uses
+       FROM user_foods WHERE user_id = ? ORDER BY uses DESC, added_at DESC`
     )
     .all(userId) as unknown as Row[];
   return rows.map(toFood);
@@ -76,18 +79,24 @@ export interface UpsertInput {
   sodium: number;
 }
 
-export function upsertFood(userId: string, input: UpsertInput): ServerUserFood {
+// bump=true のとき、既存エントリなら使用回数(uses)を+1する（学習ループの記録回数カウント）。
+export function upsertFood(
+  userId: string,
+  input: UpsertInput,
+  bump = false
+): ServerUserFood {
   const slug = input.slug || slugify(input.name || input.nameJa);
   const addedAt = Date.now();
+  const bumpClause = bump ? ", uses = uses + 1" : "";
   db()
     .prepare(
       `INSERT INTO user_foods
-         (user_id,slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         (user_id,slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at,uses)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)
        ON CONFLICT(user_id,slug) DO UPDATE SET
          name=excluded.name, name_ja=excluded.name_ja, category=excluded.category,
          calories=excluded.calories, protein=excluded.protein, fat=excluded.fat,
-         carb=excluded.carb, sodium=excluded.sodium`
+         carb=excluded.carb, sodium=excluded.sodium${bumpClause}`
     )
     .run(
       userId,
@@ -102,6 +111,9 @@ export function upsertFood(userId: string, input: UpsertInput): ServerUserFood {
       input.sodium,
       addedAt
     );
+  const row = db()
+    .prepare("SELECT uses FROM user_foods WHERE user_id = ? AND slug = ?")
+    .get(userId, slug) as { uses: number } | undefined;
   return {
     slug,
     name: input.name,
@@ -113,6 +125,7 @@ export function upsertFood(userId: string, input: UpsertInput): ServerUserFood {
     carb: input.carb,
     sodium: input.sodium,
     addedAt,
+    uses: row?.uses ?? 1,
   };
 }
 

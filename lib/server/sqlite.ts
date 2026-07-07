@@ -147,6 +147,8 @@ export function getDb(): DatabaseSync {
     "ALTER TABLE users ADD COLUMN nickname TEXT",
     "ALTER TABLE messages ADD COLUMN record TEXT",
     "ALTER TABLE user_settings ADD COLUMN main_currency TEXT",
+    // ユーザー辞書の使用回数（学習ループ。オートコンプリートの頻度順に反映）
+    "ALTER TABLE user_foods ADD COLUMN uses INTEGER NOT NULL DEFAULT 1",
   ]) {
     try {
       conn.exec(sql);
