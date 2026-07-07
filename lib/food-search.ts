@@ -18,3 +18,30 @@ export async function searchFoods(q: string): Promise<FoodSuggestion[]> {
     return [];
   }
 }
+
+export interface LookupFood {
+  slug: string;
+  name: string;
+  nameJa: string;
+  calories: number;
+  protein: number;
+  fat: number;
+  carb: number;
+  sodium: number;
+  source?: string;
+}
+
+/** 品目名を辞書で完全一致引き直し（訂正時。AI再解析はしない）。無ければ null。 */
+export async function lookupFood(name: string): Promise<LookupFood | null> {
+  if (!name.trim()) return null;
+  try {
+    const res = await fetch(`/api/food-lookup?name=${encodeURIComponent(name)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.food ?? null) as LookupFood | null;
+  } catch {
+    return null;
+  }
+}

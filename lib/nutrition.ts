@@ -91,6 +91,17 @@ export function foodTaxonomy(): { slug: string; name: string; category: string }
   }));
 }
 
+/** 料理名の完全一致で公式辞書を引く（品目名の訂正時の辞書引き直し用）。
+ *  誤置換を避けるため部分一致はしない（名前が正確に一致したときだけ差し替える）。 */
+export function lookupOfficialByName(name: string): FoodNutrition | undefined {
+  const nq = name.trim().toLowerCase();
+  if (!nq) return undefined;
+  const pool = [...foods, ...japaneseFoods, ...australiaFoods, ...restaurantFoods];
+  return pool.find(
+    (f) => f.nameJa.toLowerCase() === nq || f.name.toLowerCase() === nq
+  );
+}
+
 /** 料理名オートコンプリート用：公式辞書（地域非依存＋チェーン）を日本語/英語名で検索。 */
 export function searchOfficialFoods(
   q: string,
