@@ -61,11 +61,13 @@ export default function MealEditForm({
   actions,
   onClose,
   onDelete,
+  notice,
 }: {
   meal: MealEntry;
   actions: EditAction[];
   onClose?: () => void;
   onDelete?: () => void;
+  notice?: React.ReactNode; // 上部に出す一言（低confidence時のご飯君の誘導など）
 }) {
   const [photo, setPhoto] = useState(meal.photo);
   const [memoryPhoto, setMemoryPhoto] = useState<string | undefined>(meal.memoryPhoto);
@@ -156,6 +158,8 @@ export default function MealEditForm({
           <X className="h-4 w-4" />
         </button>
       )}
+
+      {notice}
 
       {/* 写真（差し替え可） + 現在のkcal */}
       <input

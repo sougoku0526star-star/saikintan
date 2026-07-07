@@ -20,6 +20,7 @@ import { prepareImage } from "@/lib/image";
 import MealEditForm from "./MealEditForm";
 import GohankunWidget from "./GohankunWidget";
 import DishNameInput from "./DishNameInput";
+import GohankunNudge from "./GohankunNudge";
 
 type Phase = "closed" | "pick" | "analyze" | "confirm";
 
@@ -386,6 +387,14 @@ export default function UploadFlow() {
         <MealEditForm
           meal={meal}
           onClose={close}
+          // 判定に自信がなく、かつ料理名の申告が無かったときだけ、入力学習を誘導
+          notice={
+            typeof meal.confidence === "number" &&
+            meal.confidence < 0.5 &&
+            !meal.hintName ? (
+              <GohankunNudge seed={meal.id} />
+            ) : undefined
+          }
           actions={[
             { label: "この内容で記録する", primary: true, onClick: (m) => save(m, true) },
             { label: "記録してアルバムへ", onClick: (m) => save(m, false) },
