@@ -117,10 +117,14 @@ export default function UploadFlow() {
         const data = await res.json();
         if (!res.ok || !data.meal) throw new Error(data.error || "analyze failed");
         // 既定の日付はローカル今日に。価格は0（手入力）。
+        const hintName =
+          typeof payload.dish_name_hint === "string" ? payload.dish_name_hint.trim() : "";
         const m: MealEntry = {
           ...(data.meal as MealEntry),
           confidence: data.confidence,
           date: todayISO(),
+          // 申告名を残す（保存時にユーザー辞書へ学習される）
+          ...(hintName ? { hintName } : {}),
         };
         setSource(data.source ?? "");
         setMeal(m);

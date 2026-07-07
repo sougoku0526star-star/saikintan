@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getUserId } from "@/lib/server/user";
 import { listRecords, upsertRecord } from "@/lib/server/records-db";
 import { saveDataUrl } from "@/lib/server/images-db";
+import { learnFromMeal } from "@/lib/server/dictionary-learn";
 import type { MealEntry } from "@/lib/mock-data";
 
 export const runtime = "nodejs";
@@ -35,6 +36,12 @@ export async function POST(req: Request) {
   if (meal.memoryPhoto?.startsWith("data:")) {
     const url = saveDataUrl(uid, meal.memoryPhoto);
     if (url) meal.memoryPhoto = url;
+  }
+  // ユーザー辞書への学習（申告名・手動訂正名を登録）。userNamedフラグはここでクリアされる。
+  try {
+    learnFromMeal(uid, meal, !body.id);
+  } catch (e) {
+    console.error("learnFromMeal failed:", e);
   }
   const record = upsertRecord(uid, {
     id: body.id || randomUUID(),

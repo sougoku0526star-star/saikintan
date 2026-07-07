@@ -74,7 +74,8 @@ export default function MealItemsBreakdown({
       if (food) {
         next = itemFromLookup(food); // ヒット → 辞書値に差し替え
       } else {
-        // 辞書に無い → 既存の栄養値を保持し名前だけ更新（手動編集はkcalで反映）
+        // 辞書に無い → 既存の栄養値を保持し名前だけ更新（手動編集はkcalで反映）。
+        // userNamed を立てて保存時にユーザー辞書へ学習させる。
         next = {
           ...it,
           slug: undefined,
@@ -82,6 +83,7 @@ export default function MealItemsBreakdown({
           dishName: newName,
           dishNameJa: newName,
           nutrition: manualScale(it),
+          userNamed: true,
         };
       }
     } else {
@@ -111,8 +113,9 @@ export default function MealItemsBreakdown({
       : {
           dishName: name,
           dishNameJa: name,
-          // 辞書に無い品目は0スタート（あとでkcalを手入力）
+          // 辞書に無い品目は0スタート（あとでkcalを手入力）。userNamedで学習対象に
           nutrition: { calories: 0, protein: 0, fat: 0, carb: 0, sodium: 0, portions: 1, estimated: true },
+          userNamed: true,
         };
     commit([...items, newItem]);
     setAddName("");
