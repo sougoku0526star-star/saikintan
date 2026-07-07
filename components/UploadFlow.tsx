@@ -11,6 +11,7 @@ import {
   Check,
   Sparkles,
   Pencil,
+  X,
 } from "lucide-react";
 import { addRecord, OPEN_UPLOAD_EVENT } from "@/lib/created-store";
 import { recordCandidate } from "@/lib/candidates-store";
@@ -18,8 +19,16 @@ import type { MealEntry } from "@/lib/mock-data";
 import { prepareImage } from "@/lib/image";
 import MealEditForm from "./MealEditForm";
 import GohankunWidget from "./GohankunWidget";
+import DishNameInput from "./DishNameInput";
 
 type Phase = "closed" | "pick" | "analyze" | "confirm";
+
+interface PendingImage {
+  dataUrl: string;
+  base64: string;
+  mime: string;
+  exifCoords?: { lat: number; lng: number };
+}
 
 const STEPS = [
   { icon: Utensils, label: "料理を認識しています" },
@@ -59,6 +68,9 @@ export default function UploadFlow() {
   const [meal, setMeal] = useState<MealEntry | null>(null);
   const [source, setSource] = useState<string>("");
   const [error, setError] = useState<string>("");
+  // ハイブリッド入力: 選んだ写真（未解析）と料理名（任意）を保持し、送信でまとめて解析する
+  const [pending, setPending] = useState<PendingImage | null>(null);
+  const [dishName, setDishName] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   // FAB から開く
@@ -121,10 +133,12 @@ export default function UploadFlow() {
     []
   );
 
+  // 写真を選んでも即解析せず、料理名と一緒に送信するまで保持する
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    setError("");
     // GPSは変換でEXIFが消えるため、変換前のオリジナルから読む
     let exifCoords: { lat: number; lng: number } | undefined;
     try {
@@ -138,7 +152,24 @@ export default function UploadFlow() {
     }
     // HEIC→JPEG変換＋リサイズ（表示崩れ・Vision非対応を回避）
     const { dataUrl, base64, mime } = await prepareImage(file);
-    analyze(dataUrl, { imageBase64: base64, mimeType: mime, exifCoords });
+    setPending({ dataUrl, base64, mime, exifCoords });
+  };
+
+  // 写真＋料理名（どちらか必須）で解析を1回だけ実行
+  const submit = () => {
+    const name = dishName.trim();
+    if (!pending && !name) {
+      setError("写真か料理名、どちらかを入れてね。");
+      return;
+    }
+    const payload: Record<string, unknown> = {};
+    if (pending) {
+      payload.imageBase64 = pending.base64;
+      payload.mimeType = pending.mime;
+      if (pending.exifCoords) payload.exifCoords = pending.exifCoords;
+    }
+    if (name) payload.dish_name_hint = name;
+    analyze(pending?.dataUrl || "", payload);
   };
 
   const close = () => {
@@ -146,6 +177,8 @@ export default function UploadFlow() {
     setMeal(null);
     setPhoto("");
     setError("");
+    setPending(null);
+    setDishName("");
   };
 
   // 編集フォームから受け取った最終内容で確定（サーバーへ保存）
@@ -174,10 +207,10 @@ export default function UploadFlow() {
           <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-ink/15" />
           <div className="mb-1 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-clay" />
-            <h2 className="font-serif text-lg text-ink">新しい思い出を1タップで</h2>
+            <h2 className="font-serif text-lg text-ink">新しい思い出を記録</h2>
           </div>
           <p className="mb-5 text-[12px] text-ink/50">
-            写真を選ぶだけ。料理名・カロリー・栄養はAIが計算し、料理名・分量・日付・価格・メモは次の画面で編集できます。
+            写真か料理名、どちらかでOK。両方あると、ごはんくんの判定がぐっと正確になるよ。
           </p>
 
           {error && (
@@ -195,22 +228,66 @@ export default function UploadFlow() {
             onChange={onFile}
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex flex-col items-center gap-2 rounded-2xl bg-clay px-4 py-5 text-cream shadow-card transition active:scale-95"
-            >
-              <ImagePlus className="h-7 w-7" />
-              <span className="text-[13px] font-medium">写真をえらぶ</span>
-            </button>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="flex flex-col items-center gap-2 rounded-2xl bg-white px-4 py-5 text-ink/70 shadow-card ring-1 ring-black/5 transition active:scale-95"
-            >
-              <Camera className="h-7 w-7" />
-              <span className="text-[13px] font-medium">撮影する</span>
-            </button>
+          {/* 写真エリア（選択後はサムネイル、未選択は選ぶ/撮る） */}
+          {pending ? (
+            <div className="relative overflow-hidden rounded-2xl bg-ink/5 ring-1 ring-black/5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={pending.dataUrl}
+                alt="選んだ写真"
+                className="max-h-56 w-full object-cover"
+              />
+              <button
+                onClick={() => setPending(null)}
+                aria-label="写真を外す"
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-ink/55 text-cream backdrop-blur transition active:scale-90"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-white/85 px-3 py-1.5 text-[11px] font-medium text-ink/70 shadow-card backdrop-blur active:scale-95"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                変更
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-2xl bg-clay px-4 py-5 text-cream shadow-card transition active:scale-95"
+              >
+                <ImagePlus className="h-7 w-7" />
+                <span className="text-[13px] font-medium">写真をえらぶ</span>
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-2xl bg-white px-4 py-5 text-ink/70 shadow-card ring-1 ring-black/5 transition active:scale-95"
+              >
+                <Camera className="h-7 w-7" />
+                <span className="text-[13px] font-medium">撮影する</span>
+              </button>
+            </div>
+          )}
+
+          {/* 料理名（任意・オートコンプリート） */}
+          <div className="mt-3">
+            <DishNameInput value={dishName} onChange={setDishName} />
+            <p className="mt-1.5 px-1 text-[11px] text-ink/40">
+              料理名を入れると判定がぐっと正確に。写真だけ・名前だけでもOK。
+            </p>
           </div>
+
+          {/* 送信 */}
+          <button
+            onClick={submit}
+            disabled={!pending && !dishName.trim()}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-clay py-3.5 text-[14px] font-medium text-cream shadow-card transition active:scale-[0.98] disabled:opacity-40"
+          >
+            <Sparkles className="h-4 w-4" />
+            {pending ? "この内容で記録する" : "料理名で記録する"}
+          </button>
 
           <p className="mb-2 mt-6 text-[11px] tracking-wide text-ink/40">
              または、サンプルで体験する

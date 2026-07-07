@@ -91,6 +91,26 @@ export function foodTaxonomy(): { slug: string; name: string; category: string }
   }));
 }
 
+/** 料理名オートコンプリート用：公式辞書（地域非依存＋チェーン）を日本語/英語名で検索。 */
+export function searchOfficialFoods(
+  q: string,
+  limit = 8
+): { slug: string; name: string; nameJa: string }[] {
+  const nq = q.trim().toLowerCase();
+  if (!nq) return [];
+  const pool = [...foods, ...japaneseFoods, ...australiaFoods, ...restaurantFoods];
+  const hits = pool.filter(
+    (f) => f.nameJa.toLowerCase().includes(nq) || f.name.toLowerCase().includes(nq)
+  );
+  // 前方一致を優先して並べる
+  hits.sort((a, b) => {
+    const as = a.nameJa.toLowerCase().startsWith(nq) ? 0 : 1;
+    const bs = b.nameJa.toLowerCase().startsWith(nq) ? 0 : 1;
+    return as - bs;
+  });
+  return hits.slice(0, limit).map((f) => ({ slug: f.slug, name: f.name, nameJa: f.nameJa }));
+}
+
 // ---- 計算 -----------------------------------------------------------------
 
 export interface ComputedNutrition {
