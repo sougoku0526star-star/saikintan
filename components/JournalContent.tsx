@@ -24,6 +24,7 @@ import MacroBar from "./MacroBar";
 import MealEditForm from "./MealEditForm";
 import ShareSheet from "./ShareSheet";
 import MemoryLetterCard from "./MemoryLetterCard";
+import MealItemsBreakdown from "./MealItemsBreakdown";
 
 const PORTION_PRESETS = [0.5, 0.75, 1, 1.5, 2];
 
@@ -44,6 +45,8 @@ export default function JournalContent({
   const [sharing, setSharing] = useState(false);
   const editable = !!onChange;
   const n = meal.nutrition;
+  // 複数品目（定食等）は品目内訳を出す。単品レガシー記録は従来UIのまま。
+  const hasItems = !!meal.items && meal.items.length > 0;
 
   const snapshot: SharedRecord = {
     recordId: recordId ?? meal.id,
@@ -250,7 +253,7 @@ export default function JournalContent({
           </span>
         </div>
 
-        {meal.source && (
+        {meal.source && !hasItems && (
           <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-sage/8 px-3 py-2 text-[11px] leading-relaxed text-ink/60">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sage" />
             出典: {meal.source}
@@ -287,8 +290,8 @@ export default function JournalContent({
           <MacroBar label="炭水化物" level={meal.macros.carb} accent="#B68A3E" />
         </div>
 
-        {/* 分量クイック調整（生成エントリのみ） */}
-        {editable && n && (
+        {/* 分量クイック調整（単品のみ。複数品目は品目内訳で個別編集する） */}
+        {editable && n && !hasItems && (
           <div className="mt-5 border-t border-black/5 pt-4">
             <p className="mb-2 text-[11px] text-ink/45">分量を調整（1人前=×1）</p>
             <div className="mb-3 flex gap-1.5">
@@ -345,6 +348,9 @@ export default function JournalContent({
           </p>
         )}
       </div>
+
+      {/* 品目内訳（複数品目のみ。各品目を訂正・除外でき、合計は再計算） */}
+      {hasItems && <MealItemsBreakdown meal={meal} onChange={onChange} />}
 
       {/* 為替メモ */}
       {meal.spend.amount > 0 && meal.spend.currency !== "JPY" && (

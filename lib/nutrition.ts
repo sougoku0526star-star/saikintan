@@ -8,11 +8,13 @@ import { restaurantFoods } from "./restaurant-data";
 import { japaneseFoods } from "./japanese-data";
 import { australiaFoods } from "./australia-data";
 import { regionLabel, type RegionCode } from "./region";
-import type { MealEntry } from "./mock-data";
+import type { MealEntry, MealItem, NutritionDetail } from "./mock-data";
 import {
   round1,
   macrosFromDetail,
   tagsFromDetail,
+  tagsForMeal,
+  applyItemsToMeal,
   JPY_PER_SGD,
 } from "./nutrition-scale";
 import {
@@ -312,4 +314,138 @@ export function buildMealFromUserFood(
     nutritionTags: toNutritionTags(n),
     nutrition: n,
   };
+}
+
+// ---- 複数品目（定食・複数皿）対応 ---------------------------------------
+
+/** 画像解析が返す1品目分の生データ。 */
+export interface RawVisionItem {
+  slug: string; // 辞書slug。該当なしは "none"
+  dishNameEn: string;
+  dishNameJa: string;
+  portions: number;
+  calories: number;
+  protein: number;
+  fat: number;
+  carb: number;
+  sodium: number;
+}
+
+/**
+ * 1品目を解決する：slug が辞書ヒットなら DB値×分量、user辞書ヒットならその値×分量、
+ * どちらも無ければ（none）AIの推定値を採用する。算術は全てここで行う。
+ */
+export function resolveMealItem(
+  raw: RawVisionItem,
+  userFoods: UserFoodLite[],
+  userRegion: RegionCode,
+  mealChain: string,
+  lowConfidence: boolean
+): MealItem {
+  const portions = raw.portions > 0 ? raw.portions : 1;
+  const slug = (raw.slug || "none").trim();
+
+  if (slug !== "none") {
+    // 公式辞書ヒット：DB値 × 分量。チェーンは地域補正の出典メモを付ける。
+    const food = findFood(slug);
+    if (food) {
+      const base = computeNutrition(food, portions);
+      const crossRegion = !!food.region && food.region !== userRegion;
+      let nutrition: NutritionDetail = base;
+      let source: string | undefined;
+      let tags = tagsForMeal(base);
+      if (food.chain) {
+        const official = food.source ?? `${food.chain}公式`;
+        if (crossRegion) {
+          nutrition = { ...base, estimated: true };
+          tags = [
+            { label: "地域の目安", tone: "neutral" as const },
+            ...tagsFromDetail(base).slice(0, 2),
+          ];
+          source = `${official}（${regionLabel(food.region!)}）を参照。${regionLabel(
+            userRegion
+          )}では実際の値と差がある場合があります`;
+        } else {
+          source = `${official}（${regionLabel(food.region ?? "JP")}）`;
+        }
+      } else if (food.source) {
+        source = food.source;
+      }
+      return {
+        slug: food.slug,
+        dishName: food.name,
+        dishNameJa: food.nameJa,
+        nutrition,
+        tags,
+        ...(source ? { source } : {}),
+      };
+    }
+    // ユーザー辞書ヒット
+    const uf = userFoods.find((f) => f.slug === slug);
+    if (uf) {
+      const n: NutritionDetail = {
+        calories: Math.round(uf.calories * portions),
+        protein: round1(uf.protein * portions),
+        fat: round1(uf.fat * portions),
+        carb: round1(uf.carb * portions),
+        sodium: Math.round(uf.sodium * portions),
+        portions,
+      };
+      return {
+        slug: uf.slug,
+        dishName: uf.name,
+        dishNameJa: uf.nameJa || uf.name,
+        nutrition: n,
+        tags: tagsForMeal(n),
+      };
+    }
+  }
+
+  // 辞書に無い → AIの推定値をそのまま採用（写真の量に対する概算）
+  const n: NutritionDetail = {
+    calories: Math.round(raw.calories || 0),
+    protein: round1(raw.protein || 0),
+    fat: round1(raw.fat || 0),
+    carb: round1(raw.carb || 0),
+    sodium: Math.round(raw.sodium || 0),
+    portions: 1,
+    estimated: true,
+  };
+  const baseJa = raw.dishNameJa || raw.dishNameEn;
+  const dishNameJa = baseJa ? (lowConfidence ? `${baseJa}（たぶん）` : baseJa) : "不明な品";
+  const dishName = raw.dishNameEn || raw.dishNameJa || "Unknown item";
+  const source = mealChain
+    ? `${mealChain}公式（日本）を参照した${regionLabel(userRegion)}の推定値`
+    : undefined;
+  return {
+    dishName,
+    dishNameJa,
+    nutrition: n,
+    tags: tagsForMeal(n),
+    ...(source ? { source } : {}),
+  };
+}
+
+/** 解決済みの品目内訳から、合算した MealEntry を組み立てる。 */
+export function buildMealFromItems(
+  items: MealItem[],
+  opts: BuildMealOptions
+): MealEntry {
+  const now = opts.date ? new Date(opts.date) : new Date();
+  const base: MealEntry = {
+    id: items[0]?.slug || (items[0] ? slugifyName(items[0].dishName) : "meal"),
+    dishName: "",
+    dishNameJa: "",
+    caption: opts.caption ?? "写真から複数の品目を記録しました。",
+    photo: opts.photo,
+    location: opts.location ?? "Singapore",
+    coords: opts.coords,
+    date: now.toISOString().slice(0, 10),
+    timeLabel: opts.timeLabel ?? "Today",
+    spend: draftSpend(opts.spendAmount ?? 0, opts.spendCurrency ?? DEFAULT_CURRENCY),
+    macros: { protein: "low", fat: "low", carb: "low" },
+    nutritionTags: [],
+  };
+  // 合計栄養・macros・タグ・表示名・items を applyItemsToMeal で確定
+  return applyItemsToMeal(base, items);
 }

@@ -51,8 +51,12 @@ export interface MealEntry {
   };
   /** AIが付けた栄養の総評タグ */
   nutritionTags: NutritionTag[];
-  /** 栄養素マスターから計算した実数値（あれば表示） */
+  /** 栄養素マスターから計算した実数値（あれば表示。複数品目のときは items の合算） */
   nutrition?: NutritionDetail;
+  /** 品目内訳（定食＝主菜/ご飯/味噌汁/小鉢…）。1写真に複数品ある場合に各品を保持。
+   *  トップレベルの nutrition / macros / nutritionTags はこの items の合算。
+   *  ※ 後方互換: 既存の単品レコードは items 未設定。getMealItems() で1要素として扱える。 */
+  items?: MealItem[];
   /** AIの料理判定の自信度 0.0〜1.0（あれば。低いとき注意表示） */
   confidence?: number;
   /** 栄養値の出典・地域メモ（外食チェーン等。例: マクドナルド公式(日本) を参照した推定） */
@@ -64,6 +68,20 @@ export interface MealEntry {
   /** ごはんくんが綴った思い出レター（指示書の letter_greeting/body/sign/edited をまとめて保持）。
    *  DBは meal_records.data の JSON blob なので、専用カラムでなくこのオブジェクトで永続化する。 */
   memoryLetter?: MemoryLetter;
+}
+
+/** 1食に含まれる1品目（定食の主菜・ご飯・味噌汁・小鉢など）。 */
+export interface MealItem {
+  /** 辞書slug（該当あれば）。AI推定のみの品目は未設定。 */
+  slug?: string;
+  dishName: string; // 品目名（英語）
+  dishNameJa: string; // 品目名（日本語）
+  /** この品目の栄養（分量込み。estimated=true はAI推定） */
+  nutrition: NutritionDetail;
+  /** 出典・地域メモ（辞書名／AI推定／チェーン地域補正など） */
+  source?: string;
+  /** この品目の栄養タグ（任意） */
+  tags?: NutritionTag[];
 }
 
 /** ごはんくんの思い出レター。「思い出にする」ONで生成され、ユーザーが書き換えられる。 */

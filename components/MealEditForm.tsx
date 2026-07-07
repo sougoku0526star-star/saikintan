@@ -216,8 +216,8 @@ export default function MealEditForm({
         />
       </div>
 
-      {/* 分量 */}
-      {meal.nutrition && (
+      {/* 分量（単品のみ。複数品目は詳細画面の品目内訳で個別調整する） */}
+      {meal.nutrition && !meal.items && (
         <div className="mt-4">
           <span className="mb-1.5 block text-[11px] text-ink/50">分量（1人前=×1）</span>
           <div className="flex gap-1.5">

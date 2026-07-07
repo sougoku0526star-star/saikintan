@@ -3,6 +3,7 @@
 // 表示用にメイン通貨換算値(totalMain/budgetMain)も持つ。
 import type { CreatedEntry } from "./created-store";
 import { formatMoney, type CurrencyCode } from "./currency";
+import { getMealItems } from "./nutrition-scale";
 
 export type PeriodKind = "week" | "month";
 
@@ -178,7 +179,10 @@ export function aggregatePeriod(
     vegCount = 0,
     homeCount = 0;
   const dishes: string[] = [];
-  const VEG_RE = /野菜|ベジ|サラダ|グリーン|空芯菜|ほうれん|ブロッコリ|温野菜/;
+  // 野菜系の判定語。味噌汁のわかめ・小鉢のきゅうり等、品目単位で拾えるよう幅広めに。
+  const VEG_RE =
+    /野菜|ベジ|サラダ|グリーン|空芯菜|カンコン|ほうれん|小松菜|青菜|チンゲン|ブロッコリ|温野菜|おひたし|お浸し|きんぴら|ひじき|わかめ|海藻|もずく|きゅうり|胡瓜|なす|茄子|トマト|キャベツ|レタス|大根|人参|にんじん|もやし|オクラ|ナムル|枝豆|漬物|煮物|和え|ゴーヤ|ピーマン|かぼちゃ/;
+  const HOME_SRC = "日本食品標準成分表";
 
   for (const r of inP) {
     const m = r.meal;
@@ -190,15 +194,21 @@ export function aggregatePeriod(
       carb += m.nutrition.carb || 0;
       sodium += m.nutrition.sodium || 0;
     }
-    // 野菜系：栄養タグ or 料理名から判定
-    if (
+    // 品目内訳（無ければ単品1要素）を単位に、野菜・自炊を判定する。
+    const items = getMealItems(m);
+    // 野菜系：品目名 or 品目/食事のタグから判定（味噌汁のわかめ・小鉢のきゅうり等が乗る）
+    const hasVeg =
       m.nutritionTags?.some((t) => VEG_RE.test(t.label)) ||
-      VEG_RE.test(m.dishNameJa)
-    ) {
-      vegCount++;
-    }
-    // 自炊判定：日本食品標準成分表（家庭料理）由来を自炊とみなし、それ以外は外食扱い
-    if ((m.source ?? "").includes("日本食品標準成分表")) homeCount++;
+      items.some(
+        (it) =>
+          VEG_RE.test(it.dishNameJa) || it.tags?.some((t) => VEG_RE.test(t.label))
+      );
+    if (hasVeg) vegCount++;
+    // 自炊判定：家庭料理データ（日本食品標準成分表）由来の品目があれば自炊扱い
+    const isHome =
+      (m.source ?? "").includes(HOME_SRC) ||
+      items.some((it) => (it.source ?? "").includes(HOME_SRC));
+    if (isHome) homeCount++;
     dishes.push(m.dishNameJa);
   }
 

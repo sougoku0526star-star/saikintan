@@ -4,8 +4,10 @@ import {
   findFood,
   buildMeal,
   buildMealFromEstimate,
-  buildMealFromUserFood,
+  buildMealFromItems,
+  resolveMealItem,
   foodTaxonomy,
+  type RawVisionItem,
   type UserFoodLite,
 } from "@/lib/nutrition";
 import { foods } from "@/lib/nutrition-data";
@@ -127,78 +129,54 @@ export async function POST(req: Request) {
         (typeof body.exifCoords?.lat === "number" ? body.exifCoords : undefined) ??
         (await geocode(analysis.location));
 
-      // 1) 公式辞書（100品＋）にヒット
-      const food = analysis.slug !== "none" ? findFood(analysis.slug) : undefined;
-      if (food) {
-        const meal = buildMeal(food, {
-          photo: body.photo || "",
-          portions: analysis.portions || 1,
-          caption: analysis.caption,
-          location: analysis.location,
-          coords,
-          region: userRegion,
-        });
-        return NextResponse.json({
-          meal,
-          source: "vision",
-          confidence: analysis.confidence,
-        });
-      }
-
-      // 2) ユーザー辞書（昇格済み）にヒット → データ参照として扱う
-      const uf = userFoods.find((f) => f.slug === analysis.slug);
-      if (uf) {
-        const meal = buildMealFromUserFood(uf, {
-          photo: body.photo || "",
-          portions: analysis.portions || 1,
-          caption: analysis.caption,
-          location: analysis.location,
-          coords,
-        });
-        return NextResponse.json({
-          meal,
-          source: "vision",
-          confidence: analysis.confidence,
-        });
-      }
-
-      // 辞書に該当なし：写真からAIが直接推定した栄養を採用（概算）。
-      // チェーン料理を地域補正した場合は出典メモを付ける。
-      const source = analysis.chain
-        ? `${analysis.chain}公式（日本）を参照した${regionLabel(userRegion)}の推定値`
-        : undefined;
-
-      // 名前の確定：存在しないslugが返っても dish_name を絶対に捨てない。
-      // 自信が低い(<0.5)ときは「（たぶん）」で不確かさを見せつつ、名前自体は必ず出す。
-      // 両方の名前が空＝写真に料理が無いときだけ「不明な料理」にする。
-      const baseNameJa = analysis.dishNameJa || analysis.dishNameEn;
+      // 各品目を解決（辞書ヒット→DB値×分量 / none→AI推定）して合算する。
       const lowConf = analysis.confidence < 0.5;
-      const nameJa = baseNameJa
-        ? lowConf
-          ? `${baseNameJa}（たぶん）`
-          : baseNameJa
-        : "不明な料理";
-      const nameEn = analysis.dishNameEn || analysis.dishNameJa || "Unknown dish";
+      const usableItems = analysis.items.filter(
+        (it) => it.dishNameJa || it.dishNameEn || it.slug !== "none"
+      );
 
-      const meal = buildMealFromEstimate({
-        name: nameEn,
-        nameJa,
-        calories: analysis.calories,
-        protein: analysis.protein,
-        fat: analysis.fat,
-        carb: analysis.carb,
-        sodium: analysis.sodium,
+      // 料理が1つも取れない＝写真に食べ物が無い等。従来どおり「不明な料理」1品として扱う。
+      if (usableItems.length === 0) {
+        const meal = buildMealFromEstimate({
+          name: "Unknown dish",
+          nameJa: "不明な料理",
+          calories: 0,
+          protein: 0,
+          fat: 0,
+          carb: 0,
+          sodium: 0,
+          photo: body.photo || "",
+          caption: analysis.caption,
+          location: analysis.location,
+          coords,
+        });
+        return NextResponse.json({
+          meal,
+          source: "vision_estimate",
+          confidence: analysis.confidence,
+        });
+      }
+
+      const items = usableItems.map((it) =>
+        resolveMealItem(it, userFoods, userRegion, analysis.chain, lowConf)
+      );
+      const meal = buildMealFromItems(items, {
         photo: body.photo || "",
         caption: analysis.caption,
         location: analysis.location,
         coords,
-        source,
+        region: userRegion,
       });
-      return NextResponse.json({
-        meal,
-        source: analysis.chain ? "vision_regional" : "vision_estimate",
-        confidence: analysis.confidence,
-      });
+      // 単品なら従来UI互換のためトップレベル source にも品目の出典を反映
+      if (items.length === 1 && items[0].source) meal.source = items[0].source;
+
+      const anyEstimated = items.some((it) => it.nutrition.estimated);
+      const source = analysis.chain
+        ? "vision_regional"
+        : anyEstimated
+          ? "vision_estimate"
+          : "vision";
+      return NextResponse.json({ meal, source, confidence: analysis.confidence });
     } catch (e) {
       // Sonnet 5移行の切り分け用：エラーの status / message を必ず出す
       const err = e as { name?: string; status?: number; message?: string };
@@ -224,64 +202,65 @@ export async function POST(req: Request) {
 // --- Claude Vision 呼び出し（公式SDK + 構造化出力） -----------------------
 
 interface VisionResult {
-  slug: string;
-  portions: number;
+  items: RawVisionItem[]; // 写っている品目（定食なら主菜・ご飯・味噌汁・小鉢…）最大8
   caption: string;
   location: string;
   confidence: number;
-  // 辞書に無い場合に使う、AIによる料理名＋栄養の直接推定
-  dishNameEn: string;
-  dishNameJa: string;
-  calories: number;
-  protein: number;
-  fat: number;
-  carb: number;
-  sodium: number;
   chain: string; // 地域補正したチェーン名（例: マクドナルド）。無ければ ""
 }
 
-// 構造化出力で、必ずこの形のJSONが返る。
-// slug が "none" のときは dish_name_* と栄養推定値（写真の実際の盛り付け量に対する概算）を使う。
-const RESULT_SCHEMA = {
+// 1品目のスキーマ。slug が "none" のときは dish_name_* と栄養推定値を使う。
+const ITEM_SCHEMA = {
   type: "object",
   properties: {
     slug: { type: "string", description: "料理リストのslug。該当が無ければ 'none'" },
-    dish_name_en: { type: "string", description: "料理名（英語）。slugが'none'でも必ず記入" },
-    dish_name_ja: { type: "string", description: "料理名（日本語）。slugが'none'でも必ず記入" },
+    dish_name_en: { type: "string", description: "品目名（英語）。空文字禁止" },
+    dish_name_ja: { type: "string", description: "品目名（日本語）。空文字禁止" },
     portions: { type: "number", description: "標準1人前を1.0とした分量倍率（辞書ヒット時のスケール用）" },
-    caption: {
-      type: "string",
-      description:
-        "キャラクター「ごはんくん」がユーザーに語りかける日記風コメント（日本語・2〜3文・60〜120字）。料理名や場所に触れ、やさしくゆるい口調で、海外でがんばるユーザーを応援する一言。",
-    },
-    location: { type: "string", description: "推測できる場所。不明なら 'Singapore'" },
-    confidence: { type: "number", description: "料理判定の自信度 0.0〜1.0" },
-    calories: { type: "number", description: "写真に写っている量に対する推定カロリー(kcal)" },
-    protein: { type: "number", description: "推定タンパク質(g)" },
-    fat: { type: "number", description: "推定脂質(g)" },
-    carb: { type: "number", description: "推定炭水化物(g)" },
-    sodium: { type: "number", description: "推定塩分(mg)" },
-    chain: {
-      type: "string",
-      description:
-        "チェーン参照リストの料理を地域補正して栄養を出した場合のチェーン名（例: マクドナルド）。それ以外は空文字 ''。",
-    },
+    calories: { type: "number", description: "この品目の推定カロリー(kcal)" },
+    protein: { type: "number", description: "この品目の推定タンパク質(g)" },
+    fat: { type: "number", description: "この品目の推定脂質(g)" },
+    carb: { type: "number", description: "この品目の推定炭水化物(g)" },
+    sodium: { type: "number", description: "この品目の推定塩分(mg)" },
   },
   required: [
     "slug",
     "dish_name_en",
     "dish_name_ja",
     "portions",
-    "caption",
-    "location",
-    "confidence",
     "calories",
     "protein",
     "fat",
     "carb",
     "sodium",
-    "chain",
   ],
+  additionalProperties: false,
+} as const;
+
+// 構造化出力で、必ずこの形のJSONが返る。caption/location/confidence/chain は食事全体で1つ。
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    items: {
+      type: "array",
+      // ※ json_schema構造化出力は array の minItems/maxItems 非対応。上限8はコード側で slice。
+      items: ITEM_SCHEMA,
+      description: "写真に写っている料理・小鉢・汁物・主食を全て個別に列挙（最大8品）",
+    },
+    caption: {
+      type: "string",
+      description:
+        "キャラクター「ごはんくん」がユーザーに語りかける日記風コメント（日本語・2〜3文・60〜120字）。料理名や場所に触れ、やさしくゆるい口調で、海外でがんばるユーザーを応援する一言。食事全体で1つ。",
+    },
+    location: { type: "string", description: "推測できる場所。不明なら 'Singapore'" },
+    confidence: { type: "number", description: "料理判定の自信度 0.0〜1.0（食事全体で1つ）" },
+    chain: {
+      type: "string",
+      description:
+        "チェーン参照リストの料理を地域補正して栄養を出した場合のチェーン名（例: マクドナルド）。それ以外は空文字 ''。",
+    },
+  },
+  required: ["items", "caption", "location", "confidence", "chain"],
   additionalProperties: false,
 } as const;
 
@@ -318,19 +297,18 @@ chain にチェーン名（例: マクドナルド）を入れて返してくだ
   const prompt = `次の食事写真を分析してください。料理の判定と栄養の数値は、空想ではなく
 現実的で正確に見積もること（ここはプロの栄養士として厳密に）。
 
-下の2つのリストから最も一致するものを slug で1つだけ選んでください。
+# 品目の列挙（重要）
+写真に写っている料理・小鉢・汁物・主食を「全て個別に」 items 配列に列挙してください。
+定食は主菜・ご飯・味噌汁・小鉢…のように1品ずつ分解します（主菜を先頭に）。
+調味料（わさび・大根おろし・醤油・レモン等）は栄養が僅少なので除外して構いません。
+各品目について、下の2つのリストに該当があれば slug を、無ければ slug を "none" にして
+その品目の栄養推定値（カロリー・タンパク質・脂質・炭水化物・塩分）を記入します。
 まず「あなたの辞書」を優先的に照合し、無ければ「標準の料理リスト」を見ます。
-どちらにも該当が無ければ slug を "none" にしてください。
 
-slug が "none" の場合でも、写真から料理名（英語・日本語）を推定し、
-写真に写っている量に対する栄養（カロリー・タンパク質・脂質・炭水化物・塩分）を
-できる限り正確に見積もってください。料理が辞書にあってもなくても、
-これらの推定値は必ず記入してください。
-
-dish_name_ja / dish_name_en は、判定に自信がなくても「最も可能性の高い料理名」を必ず記入すること。
+各品目の dish_name_ja / dish_name_en は、自信がなくても「最も可能性の高い料理名」を必ず記入。
 空文字は禁止。よだれ鶏・口水鶏のような中華料理も、日本語名（例: よだれ鶏）で必ず書くこと。
-写真に食べ物がまったく写っていない場合に限り、dish_name_ja / dish_name_en を空文字にしてよい
-（このとき confidence は 0 にする）。
+写真に食べ物がまったく写っていない場合に限り、items を1要素にして dish_name を空文字・
+栄養0・confidence 0 にしてください。
 
 # 外食チェーンの地域補正
 ${chainRule}
@@ -349,8 +327,8 @@ ${restaurantReference()}`;
   // 構造化出力（output_config.format）で必ずスキーマ通りのJSONを得る
   const msg = await client.messages.create({
     model: MODEL,
-    // Sonnet 5の新トークナイザーは日本語で約+30%。切れ防止に 1024→1350
-    max_tokens: 1350,
+    // 複数品目（最大8品×栄養）＋日本語（Sonnet 5で約+30%）で出力が長い。切れ防止に余裕を持たせる
+    max_tokens: 2800,
     system: gohankunSystemPrompt(userName),
     messages: [
       {
@@ -374,26 +352,30 @@ ${restaurantReference()}`;
   // 判定の調査用ログ（AIの生レスポンスと主要フィールド）。
   console.log("[analyze] raw:", raw);
   const json = JSON.parse(raw);
+  const rawItems = Array.isArray(json.items) ? json.items : [];
+  const items: RawVisionItem[] = rawItems.slice(0, 8).map((it: Record<string, unknown>) => ({
+    slug: String(it.slug ?? "none"),
+    dishNameEn: String(it.dish_name_en ?? ""),
+    dishNameJa: String(it.dish_name_ja ?? ""),
+    portions: Number(it.portions) || 1,
+    calories: Number(it.calories) || 0,
+    protein: Number(it.protein) || 0,
+    fat: Number(it.fat) || 0,
+    carb: Number(it.carb) || 0,
+    sodium: Number(it.sodium) || 0,
+  }));
   console.log(
-    "[analyze] slug=%s dish_name_ja=%s dish_name_en=%s confidence=%s",
-    json.slug,
-    json.dish_name_ja,
-    json.dish_name_en,
-    json.confidence
+    "[analyze] items=%d [%s] confidence=%s chain=%s",
+    items.length,
+    items.map((i) => `${i.slug}:${i.dishNameJa}`).join(" | "),
+    json.confidence,
+    json.chain
   );
   return {
-    slug: String(json.slug ?? "none"),
-    portions: Number(json.portions) || 1,
+    items,
     caption: String(json.caption ?? ""),
     location: json.location ? String(json.location) : "Singapore",
     confidence: Number(json.confidence) || 0,
-    dishNameEn: String(json.dish_name_en ?? ""),
-    dishNameJa: String(json.dish_name_ja ?? ""),
-    calories: Number(json.calories) || 0,
-    protein: Number(json.protein) || 0,
-    fat: Number(json.fat) || 0,
-    carb: Number(json.carb) || 0,
-    sodium: Number(json.sodium) || 0,
     chain: String(json.chain ?? ""),
   };
 }
