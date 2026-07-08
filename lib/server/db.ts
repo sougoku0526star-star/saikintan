@@ -24,7 +24,11 @@ function slugify(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `user-${s || "dish"}`;
+  if (s) return `user-${s}`;
+  // 日本語等でascii部が残らない場合は名前のハッシュでユニーク化（同名は同slug＝重複統合）。
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return `user-${h.toString(36) || "dish"}`;
 }
 
 interface Row {

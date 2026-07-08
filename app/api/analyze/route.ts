@@ -61,7 +61,8 @@ interface AnalyzeBody {
   foodId?: number;
   portions?: number;
   exifCoords?: { lat: number; lng: number }; // 写真EXIFのGPS（あれば優先）
-  dish_name_hint?: string; // ユーザーの料理名申告（任意）。あれば同定はこれが正
+  dish_name_hints?: string[]; // ユーザーの料理名申告（任意・最大8品）。あれば同定はこれが正
+  dish_name_hint?: string; // 旧: 単一申告（後方互換。dish_name_hints があればそちらを優先）
 }
 
 // 写真解析（ビジョン）用モデル。既定はコスト最適化のためSonnet。
@@ -104,8 +105,18 @@ export async function POST(req: Request) {
   // --- 2) 解析：写真＋料理名(hint)のハイブリッド。呼び出しは常に1回だけ。 ----
   // 写真あり／hintのみ（写真なし）／写真のみ、いずれも同じAPIで処理する。
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const hint = String(body.dish_name_hint ?? "").trim();
-  if ((body.imageBase64 || hint) && apiKey) {
+  // 申告名（複数可・最大8）。旧 dish_name_hint（単一）も受け付ける。
+  const hints = (
+    Array.isArray(body.dish_name_hints)
+      ? body.dish_name_hints
+      : body.dish_name_hint
+        ? [body.dish_name_hint]
+        : []
+  )
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  if ((body.imageBase64 || hints.length) && apiKey) {
     try {
       // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
       const uid = getUserId();
@@ -120,7 +131,7 @@ export async function POST(req: Request) {
         userFoods,
         userName,
         userRegion,
-        hint
+        hints
       );
 
       // 出力側の機械チェック：コメントに禁止ワード/栄養の生数値があれば安全な定型に差し替え
@@ -274,7 +285,7 @@ async function analyzeWithClaude(
   userFoods: UserFoodLite[] = [],
   userName: string | null = null,
   userRegion: RegionCode = "SG",
-  hint: string = ""
+  hints: string[] = []
 ): Promise<VisionResult> {
   const client = new Anthropic(); // ANTHROPIC_API_KEY を環境から自動取得
   const you = gohankunYou(userName);
@@ -300,17 +311,19 @@ async function analyzeWithClaude(
 slug は "none"、dish_name_* に料理名、calories/protein/fat/carb/sodium に${regionJa}向けの推定値、
 chain にチェーン名（例: マクドナルド）を入れて返してください。地域差が不明なら日本公式値に近い値で構いません。`;
 
-  // ユーザーの申告（hint）があれば、料理の同定は申告を正とする（写真は量・シーン担当）。
-  const hintSection = hint
+  // ユーザーの申告（hints）があれば、料理の同定は申告を正とする（写真は量・シーン担当）。
+  const hintList = hints.map((h) => `「${h}」`).join("、");
+  const hintSection = hints.length
     ? `
 
 # ユーザーの申告（最優先）
-ユーザーはこの食事を「${hint}」と申告しています。以下のルールに従うこと:
-- 料理の同定はこの申告が正。写真の見た目と矛盾しても申告を優先する
-- 写真は量(portions)・付け合わせの把握・全体のシーン理解にのみ使う
-- 申告が定食・セット名（例: 焼き魚定食）の場合、写真を参照して構成品目（主菜・ご飯・汁物・小鉢等）に分解し、items配列に個別に列挙する
-- 申告に対応するslugが料理リストにあればそれを使い、なければ slug: "none" で栄養推定値を返す
-- 申告と写真が明らかに別物の場合（例: 申告「ラーメン」で写真がケーキ）でも申告を優先しつつ、confidenceを0.3以下にする`
+ユーザーはこの食事の品目として次を申告しています: ${hintList}
+以下のルールに従うこと:
+- 各申告品目を items に1つずつ対応させ、料理の同定は申告を正とする（写真と矛盾しても申告を優先）
+- 各品目は辞書にあればそのslug、なければ slug: "none" で栄養推定値を返す。写真は量(portions)・盛り付けの把握に使う
+- 申告が1つだけで定食・セット名（例: 焼き魚定食）の場合は、写真を参照して構成品目（主菜・ご飯・汁物・小鉢等）に分解してよい
+- 申告に無い品目が写真に明確に写っていれば足してよいが、申告された品目は必ず全て含める
+- 申告と写真が明らかに別物の品目（例: 申告「ラーメン」で写真がケーキ）でも申告を優先しつつ、confidenceを0.3以下にする`
     : "";
 
   const opener = hasImage

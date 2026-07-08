@@ -35,7 +35,11 @@ export function slugifyUser(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `user-${s || "dish"}`;
+  if (s) return `user-${s}`;
+  // 日本語等でascii部が残らない場合は名前のハッシュでユニーク化（サーバーのslugifyと一致）。
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return `user-${h.toString(36) || "dish"}`;
 }
 
 function notify() {

@@ -19,7 +19,7 @@ import type { MealEntry } from "@/lib/mock-data";
 import { prepareImage } from "@/lib/image";
 import MealEditForm from "./MealEditForm";
 import GohankunWidget from "./GohankunWidget";
-import DishNameInput from "./DishNameInput";
+import DishNamesInput from "./DishNamesInput";
 import GohankunNudge from "./GohankunNudge";
 
 type Phase = "closed" | "pick" | "analyze" | "confirm";
@@ -69,9 +69,9 @@ export default function UploadFlow() {
   const [meal, setMeal] = useState<MealEntry | null>(null);
   const [source, setSource] = useState<string>("");
   const [error, setError] = useState<string>("");
-  // ハイブリッド入力: 選んだ写真（未解析）と料理名（任意）を保持し、送信でまとめて解析する
+  // ハイブリッド入力: 選んだ写真（未解析）と料理名（任意・複数可）を保持し、送信でまとめて解析する
   const [pending, setPending] = useState<PendingImage | null>(null);
-  const [dishName, setDishName] = useState<string>("");
+  const [dishNames, setDishNames] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // FAB から開く
@@ -118,14 +118,15 @@ export default function UploadFlow() {
         const data = await res.json();
         if (!res.ok || !data.meal) throw new Error(data.error || "analyze failed");
         // 既定の日付はローカル今日に。価格は0（手入力）。
-        const hintName =
-          typeof payload.dish_name_hint === "string" ? payload.dish_name_hint.trim() : "";
+        const hintNames = Array.isArray(payload.dish_name_hints)
+          ? (payload.dish_name_hints as string[])
+          : [];
         const m: MealEntry = {
           ...(data.meal as MealEntry),
           confidence: data.confidence,
           date: todayISO(),
           // 申告名を残す（保存時にユーザー辞書へ学習される）
-          ...(hintName ? { hintName } : {}),
+          ...(hintNames.length ? { hintNames } : {}),
         };
         setSource(data.source ?? "");
         setMeal(m);
@@ -162,8 +163,7 @@ export default function UploadFlow() {
 
   // 写真＋料理名（どちらか必須）で解析を1回だけ実行
   const submit = () => {
-    const name = dishName.trim();
-    if (!pending && !name) {
+    if (!pending && dishNames.length === 0) {
       setError("写真か料理名、どちらかを入れてね。");
       return;
     }
@@ -173,7 +173,7 @@ export default function UploadFlow() {
       payload.mimeType = pending.mime;
       if (pending.exifCoords) payload.exifCoords = pending.exifCoords;
     }
-    if (name) payload.dish_name_hint = name;
+    if (dishNames.length) payload.dish_name_hints = dishNames;
     analyze(pending?.dataUrl || "", payload);
   };
 
@@ -183,7 +183,7 @@ export default function UploadFlow() {
     setPhoto("");
     setError("");
     setPending(null);
-    setDishName("");
+    setDishNames([]);
   };
 
   // 編集フォームから受け取った最終内容で確定（サーバーへ保存）
@@ -276,18 +276,18 @@ export default function UploadFlow() {
             </div>
           )}
 
-          {/* 料理名（任意・オートコンプリート） */}
+          {/* 料理名（任意・複数可・オートコンプリート） */}
           <div className="mt-3">
-            <DishNameInput value={dishName} onChange={setDishName} />
+            <DishNamesInput values={dishNames} onChange={setDishNames} max={8} />
             <p className="mt-1.5 px-1 text-[11px] text-ink/40">
-              料理名を入れると判定がぐっと正確に。写真だけ・名前だけでもOK。
+              料理名を入れると判定がぐっと正確に。定食は品目ごとに足すと精度が上がるよ（最大8品）。
             </p>
           </div>
 
           {/* 送信 */}
           <button
             onClick={submit}
-            disabled={!pending && !dishName.trim()}
+            disabled={!pending && dishNames.length === 0}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-clay py-3.5 text-[14px] font-medium text-cream shadow-card transition active:scale-[0.98] disabled:opacity-40"
           >
             <Sparkles className="h-4 w-4" />
@@ -391,7 +391,7 @@ export default function UploadFlow() {
           notice={
             typeof meal.confidence === "number" &&
             meal.confidence < 0.5 &&
-            !meal.hintName ? (
+            !meal.hintNames?.length ? (
               <GohankunNudge seed={meal.id} />
             ) : undefined
           }

@@ -68,8 +68,8 @@ export interface MealEntry {
   /** ごはんくんが綴った思い出レター（指示書の letter_greeting/body/sign/edited をまとめて保持）。
    *  DBは meal_records.data の JSON blob なので、専用カラムでなくこのオブジェクトで永続化する。 */
   memoryLetter?: MemoryLetter;
-  /** ユーザーが記録時に申告した料理名（hint）。公式辞書に無ければユーザー辞書へ学習する。 */
-  hintName?: string;
+  /** ユーザーが記録時に申告した料理名（複数可・最大8品）。公式辞書に無ければユーザー辞書へ学習する。 */
+  hintNames?: string[];
 }
 
 /** 1食に含まれる1品目（定食の主菜・ご飯・味噌汁・小鉢など）。 */
