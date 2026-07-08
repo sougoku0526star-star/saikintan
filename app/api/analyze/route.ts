@@ -6,10 +6,12 @@ import {
   buildMealFromEstimate,
   buildMealFromItems,
   resolveMealItem,
+  lookupOfficialByName,
   foodTaxonomy,
   type RawVisionItem,
   type UserFoodLite,
 } from "@/lib/nutrition";
+import type { MealItem } from "@/lib/mock-data";
 import { foods } from "@/lib/nutrition-data";
 import { restaurantReference } from "@/lib/restaurant-data";
 import { getUserId, getAuthUser } from "@/lib/server/user";
@@ -81,6 +83,37 @@ function toMedia(mime?: string): SupportedMedia {
   }
 }
 
+// 申告名から品目を組み立てる（AIが品目を返せなかったときの保険）。
+// 辞書ヒットは実栄養、無ければ0の推定（ユーザーがあとで整える）。ユーザーの入力を絶対に捨てない。
+function hintToItem(
+  name: string,
+  userFoods: UserFoodLite[],
+  userRegion: RegionCode
+): MealItem {
+  const off = lookupOfficialByName(name);
+  const nq = name.toLowerCase();
+  const uf = off
+    ? undefined
+    : userFoods.find(
+        (f) => f.nameJa.toLowerCase() === nq || f.name.toLowerCase() === nq
+      );
+  const slug = off?.slug ?? uf?.slug ?? "none";
+  const raw: RawVisionItem = {
+    slug,
+    dishNameEn: off?.name ?? name,
+    dishNameJa: name,
+    portions: 1,
+    calories: 0,
+    protein: 0,
+    fat: 0,
+    carb: 0,
+    sodium: 0,
+  };
+  const item = resolveMealItem(raw, userFoods, userRegion, "", false);
+  if (!item.slug) item.userNamed = true; // 辞書に無い申告名は学習対象
+  return item;
+}
+
 export async function POST(req: Request) {
   let body: AnalyzeBody;
   try {
@@ -117,14 +150,29 @@ export async function POST(req: Request) {
     .filter(Boolean)
     .slice(0, 8);
   if ((body.imageBase64 || hints.length) && apiKey) {
+    // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
+    const uid = getUserId();
+    const userFoods: UserFoodLite[] = listFoods(uid);
+    const me = getAuthUser();
+    const userName = me?.nickname ?? me?.username ?? null;
+    // ユーザーの地域（メイン通貨から推定）。チェーン料理の地域補正に使う。
+    const userRegion = currencyToRegion(getSettings(uid).mainCurrency);
+
+    // AIが品目を返せない/失敗しても、申告名があれば必ずそれで記録を作る（「不明な料理」にしない）。
+    const buildFromHints = (caption?: string) => {
+      const items = hints.map((h) => hintToItem(h, userFoods, userRegion));
+      const meal = buildMealFromItems(items, {
+        photo: body.photo || "",
+        caption:
+          caption ||
+          `${hints[0]}${hints.length > 1 ? ` ほか${hints.length - 1}品` : ""}を記録したよ。栄養は目安だから、気になったら整えてね。`,
+        location: "Singapore",
+        region: userRegion,
+      });
+      return NextResponse.json({ meal, source: "vision_estimate", confidence: 0.4 });
+    };
+
     try {
-      // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
-      const uid = getUserId();
-      const userFoods: UserFoodLite[] = listFoods(uid);
-      const me = getAuthUser();
-      const userName = me?.nickname ?? me?.username ?? null;
-      // ユーザーの地域（メイン通貨から推定）。チェーン料理の地域補正に使う。
-      const userRegion = currencyToRegion(getSettings(uid).mainCurrency);
       const analysis = await analyzeWithClaude(
         body.imageBase64 ?? null,
         toMedia(body.mimeType),
@@ -150,8 +198,11 @@ export async function POST(req: Request) {
         (it) => it.dishNameJa || it.dishNameEn || it.slug !== "none"
       );
 
-      // 料理が1つも取れない＝写真に食べ物が無い等。従来どおり「不明な料理」1品として扱う。
+      // 品目が1つも取れないとき。
       if (usableItems.length === 0) {
+        // 申告名があるなら、それを捨てず品目として組み立てる（切れ/失敗の保険）。
+        if (hints.length) return buildFromHints(analysis.caption);
+        // 申告も無い＝写真に食べ物が無い等 → 「不明な料理」1品として扱う。
         const meal = buildMealFromEstimate({
           name: "Unknown dish",
           nameJa: "不明な料理",
@@ -200,6 +251,8 @@ export async function POST(req: Request) {
         status: err?.status,
         message: err?.message,
       });
+      // 申告名があれば、それで記録を作る（AI失敗でもユーザーの入力を捨てない）
+      if (hints.length) return buildFromHints();
       // 失敗時はモックにフォールバック（下へ）
     }
   }
@@ -382,7 +435,7 @@ ${restaurantReference()}`;
     model: MODEL,
     // 最大8品×栄養＋caption、日本語（Sonnet 5で約+30%）で出力が長い。
     // 申告と写真が食い違う難ケースでは品目が増えがちなので余裕を持たせる。
-    max_tokens: 4000,
+    max_tokens: 6000,
     system: gohankunSystemPrompt(userName),
     messages: [{ role: "user", content }],
     output_config: {
@@ -408,7 +461,8 @@ ${restaurantReference()}`;
     sodium: Number(it.sodium) || 0,
   }));
   console.log(
-    "[analyze] items=%d [%s] confidence=%s chain=%s",
+    "[analyze] stop=%s items=%d [%s] confidence=%s chain=%s",
+    msg.stop_reason,
     items.length,
     items.map((i) => `${i.slug}:${i.dishNameJa}`).join(" | "),
     json.confidence,
