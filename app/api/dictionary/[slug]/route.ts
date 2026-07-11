@@ -9,7 +9,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { slug: string } }
 ) {
-  const uid = getUserId();
-  deleteFood(uid, params.slug);
+  const uid = await getUserId();
+  await deleteFood(uid, params.slug);
   return NextResponse.json({ ok: true });
 }

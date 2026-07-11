@@ -10,13 +10,13 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const userId = body.token ? consumeToken(body.token, "verify") : null;
+  const userId = body.token ? await consumeToken(body.token, "verify") : null;
   if (!userId) {
     return NextResponse.json(
       { error: "リンクが無効または期限切れです" },
       { status: 400 }
     );
   }
-  setEmailVerified(userId);
+  await setEmailVerified(userId);
   return NextResponse.json({ ok: true });
 }

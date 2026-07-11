@@ -13,14 +13,14 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const user = authenticate(body.email || "", body.password || "");
+  const user = await authenticate(body.email || "", body.password || "");
   if (!user) {
     return NextResponse.json(
       { error: "メールアドレスまたはパスワードが違います" },
       { status: 401 }
     );
   }
-  const token = createSession(user.id);
+  const token = await createSession(user.id);
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",

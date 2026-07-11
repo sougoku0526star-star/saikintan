@@ -1,5 +1,5 @@
 // 週次レターの提案(action)を週ごとに永続化。約束ループ（P1）で翌週に達成度を照合する。
-import { getDb } from "./sqlite";
+import { getDb } from "./pg";
 import { ACTION_KINDS, type ActionKind, type WeeklyAction } from "../weekly";
 
 function normalizeKind(k: string | null): ActionKind {
@@ -7,12 +7,12 @@ function normalizeKind(k: string | null): ActionKind {
 }
 
 /** その週の提案を保存（同週は上書き）。week は週開始日ISO。 */
-export function saveWeeklyAction(
+export async function saveWeeklyAction(
   userId: string,
   weekStart: string,
   action: WeeklyAction
-): void {
-  getDb()
+): Promise<void> {
+  await getDb()
     .prepare(
       `INSERT INTO weekly_letters (user_id, week_start, action_text, action_kind, created_at)
        VALUES (?,?,?,?,?)
@@ -25,17 +25,15 @@ export function saveWeeklyAction(
 }
 
 /** 指定週の保存済み提案（無ければ undefined）。 */
-export function getWeeklyAction(
+export async function getWeeklyAction(
   userId: string,
   weekStart: string
-): WeeklyAction | undefined {
-  const row = getDb()
+): Promise<WeeklyAction | undefined> {
+  const row = await getDb()
     .prepare(
       "SELECT action_text, action_kind FROM weekly_letters WHERE user_id = ? AND week_start = ?"
     )
-    .get(userId, weekStart) as
-    | { action_text: string | null; action_kind: string | null }
-    | undefined;
+    .get<{ action_text: string | null; action_kind: string | null }>(userId, weekStart);
   if (!row || !row.action_text) return undefined;
   return { text: row.action_text, kind: normalizeKind(row.action_kind) };
 }

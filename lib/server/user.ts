@@ -9,11 +9,11 @@ export const SESSION_COOKIE = "sid";
 const TWO_YEARS = 60 * 60 * 24 * 365 * 2;
 
 /** データのスコープに使うID（ログイン中はアカウント、未ログインは匿名）。 */
-export function getUserId(): string {
+export async function getUserId(): Promise<string> {
   const jar = cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
   if (sid) {
-    const uid = getSessionUserId(sid);
+    const uid = await getSessionUserId(sid);
     if (uid) return uid;
   }
   const existing = jar.get(ANON)?.value;
@@ -29,12 +29,12 @@ export function getUserId(): string {
 }
 
 /** ログイン中のユーザー（未ログインは null）。 */
-export function getAuthUser(): AuthUser | null {
+export async function getAuthUser(): Promise<AuthUser | null> {
   const sid = cookies().get(SESSION_COOKIE)?.value;
   if (!sid) return null;
-  const uid = getSessionUserId(sid);
+  const uid = await getSessionUserId(sid);
   if (!uid) return null;
-  return getUserById(uid) ?? null;
+  return (await getUserById(uid)) ?? null;
 }
 
 /** 現在の匿名uid（あれば）。サインアップ時のデータ引き継ぎに使う。 */

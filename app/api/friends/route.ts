@@ -5,11 +5,12 @@ import { listFriends, listIncoming, listOutgoing } from "@/lib/server/friends-db
 export const runtime = "nodejs";
 
 export async function GET() {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
-  return NextResponse.json({
-    friends: listFriends(me.id),
-    incoming: listIncoming(me.id),
-    outgoing: listOutgoing(me.id),
-  });
+  const [friends, incoming, outgoing] = await Promise.all([
+    listFriends(me.id),
+    listIncoming(me.id),
+    listOutgoing(me.id),
+  ]);
+  return NextResponse.json({ friends, incoming, outgoing });
 }

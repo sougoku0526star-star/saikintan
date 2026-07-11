@@ -1,9 +1,9 @@
 // サーバー側のユーザー辞書リポジトリ。
-// いまは Node 24 組み込みの SQLite（node:sqlite）を使用。
-// この層の関数シグネチャを保てば、後で Postgres / Prisma 等へ差し替え可能。
+// Neon Postgres（@neondatabase/serverless）を使用。
+// この層の関数シグネチャを保てば、後で別のPostgresプロバイダへも差し替え可能。
 // ※ サーバー専用。クライアントから import しないこと。
 
-import { getDb as db } from "./sqlite";
+import { getDb as db } from "./pg";
 
 export interface ServerUserFood {
   slug: string;
@@ -61,13 +61,13 @@ function toFood(r: Row): ServerUserFood {
   };
 }
 
-export function listFoods(userId: string): ServerUserFood[] {
-  const rows = db()
+export async function listFoods(userId: string): Promise<ServerUserFood[]> {
+  const rows = await db()
     .prepare(
       `SELECT slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at,uses
        FROM user_foods WHERE user_id = ? ORDER BY uses DESC, added_at DESC`
     )
-    .all(userId) as unknown as Row[];
+    .all<Row>(userId);
   return rows.map(toFood);
 }
 
@@ -84,15 +84,15 @@ export interface UpsertInput {
 }
 
 // bump=true のとき、既存エントリなら使用回数(uses)を+1する（学習ループの記録回数カウント）。
-export function upsertFood(
+export async function upsertFood(
   userId: string,
   input: UpsertInput,
   bump = false
-): ServerUserFood {
+): Promise<ServerUserFood> {
   const slug = input.slug || slugify(input.name || input.nameJa);
   const addedAt = Date.now();
   const bumpClause = bump ? ", uses = uses + 1" : "";
-  db()
+  await db()
     .prepare(
       `INSERT INTO user_foods
          (user_id,slug,name,name_ja,category,calories,protein,fat,carb,sodium,added_at,uses)
@@ -115,9 +115,9 @@ export function upsertFood(
       input.sodium,
       addedAt
     );
-  const row = db()
+  const row = await db()
     .prepare("SELECT uses FROM user_foods WHERE user_id = ? AND slug = ?")
-    .get(userId, slug) as { uses: number } | undefined;
+    .get<{ uses: number }>(userId, slug);
   return {
     slug,
     name: input.name,
@@ -133,6 +133,6 @@ export function upsertFood(
   };
 }
 
-export function deleteFood(userId: string, slug: string): void {
-  db().prepare(`DELETE FROM user_foods WHERE user_id = ? AND slug = ?`).run(userId, slug);
+export async function deleteFood(userId: string, slug: string): Promise<void> {
+  await db().prepare(`DELETE FROM user_foods WHERE user_id = ? AND slug = ?`).run(userId, slug);
 }

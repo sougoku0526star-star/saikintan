@@ -20,12 +20,12 @@ export interface LookupFood {
 // 品目名の訂正時に、辞書を「引き直す」（AI再解析はしない）。
 // 完全一致でユーザー辞書→公式辞書の順に引き、ヒットすれば栄養値を返す。無ければ null。
 export async function GET(req: Request) {
-  const uid = getUserId();
+  const uid = await getUserId();
   const name = (new URL(req.url).searchParams.get("name") ?? "").trim();
   if (!name) return NextResponse.json({ food: null });
   const nq = name.toLowerCase();
 
-  const uf = listFoods(uid).find(
+  const uf = (await listFoods(uid)).find(
     (f) => f.nameJa.toLowerCase() === nq || f.name.toLowerCase() === nq
   );
   if (uf) {

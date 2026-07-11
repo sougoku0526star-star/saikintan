@@ -1,6 +1,6 @@
 // 為替レート（各対応通貨 → JPY）。1日1回 ExchangeRate-API から取得し、
-// SQLite(fx_rates)にキャッシュ。サーバー専用。差し替えれば別プロバイダにも対応可能。
-import { getDb } from "./sqlite";
+// Postgres(fx_rates)にキャッシュ。サーバー専用。差し替えれば別プロバイダにも対応可能。
+import { getDb } from "./pg";
 import {
   CURRENCY_CODES,
   FALLBACK_RATES_TO_JPY,
@@ -20,10 +20,10 @@ export interface FxRates {
   source: "cache" | "api" | "stale" | "default";
 }
 
-function readCache(): { rates: Partial<Record<CurrencyCode, number>>; dates: Set<string> } {
-  const rows = getDb()
+async function readCache(): Promise<{ rates: Partial<Record<CurrencyCode, number>>; dates: Set<string> }> {
+  const rows = await getDb()
     .prepare("SELECT pair, rate, fetched_on FROM fx_rates")
-    .all() as { pair: string; rate: number; fetched_on: string }[];
+    .all<{ pair: string; rate: number; fetched_on: string }>();
   const rates: Partial<Record<CurrencyCode, number>> = {};
   const dates = new Set<string>();
   for (const r of rows) {
@@ -48,7 +48,7 @@ function withFallback(
 export async function getRatesToJpy(): Promise<FxRates> {
   const db = getDb();
   const today = todayStr();
-  const cache = readCache();
+  const cache = await readCache();
   const haveAll = CURRENCY_CODES.every((c) => cache.rates[c] != null);
 
   // 全通貨そろっていて当日取得済みなら再取得しない
@@ -66,16 +66,17 @@ export async function getRatesToJpy(): Promise<FxRates> {
       const data = await res.json();
       if (data?.result === "success" && data.conversion_rates) {
         const cr = data.conversion_rates as Record<string, number>;
-        const upsert = db.prepare(
-          `INSERT INTO fx_rates (pair, rate, fetched_on) VALUES (?,?,?)
-           ON CONFLICT(pair) DO UPDATE SET rate = excluded.rate, fetched_on = excluded.fetched_on`
-        );
         const rates = {} as Record<CurrencyCode, number>;
         for (const c of CURRENCY_CODES) {
           const jpyToC = cr[c];
           const rate = jpyToC && jpyToC > 0 ? 1 / jpyToC : FALLBACK_RATES_TO_JPY[c];
           rates[c] = Math.round(rate * 10000) / 10000;
-          upsert.run(`${c}_JPY`, rates[c], today);
+          await db
+            .prepare(
+              `INSERT INTO fx_rates (pair, rate, fetched_on) VALUES (?,?,?)
+               ON CONFLICT(pair) DO UPDATE SET rate = excluded.rate, fetched_on = excluded.fetched_on`
+            )
+            .run(`${c}_JPY`, rates[c], today);
         }
         return { rates, date: today, source: "api" };
       }

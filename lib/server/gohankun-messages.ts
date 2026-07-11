@@ -3,7 +3,7 @@
 // 台詞エンジン（生成）と配信チャネル（今はアプリ内メッセージ）を分離してあるので、
 // 将来 Web Push を足すときも evaluateGohankunMessages をそのまま再利用できる。
 import { randomUUID } from "node:crypto";
-import { getDb } from "./sqlite";
+import { getDb } from "./pg";
 import { listRecords } from "./records-db";
 import { getSettings } from "./settings-db";
 import { getRatesToJpy } from "./fx-db";
@@ -98,13 +98,13 @@ function toMsg(r: Row): GohankunMessage {
   };
 }
 
-function rows(uid: string): Row[] {
+async function rows(uid: string): Promise<Row[]> {
   return getDb()
     .prepare(
       `SELECT id, kind, text, created_at, read, cta_label, cta_href, ref
        FROM gohankun_messages WHERE user_id = ? ORDER BY created_at DESC`
     )
-    .all(uid) as Row[];
+    .all<Row>(uid);
 }
 
 // ---- 生成候補（永続化前）-------------------------------------------------
@@ -135,10 +135,15 @@ function sameLocalDay(aEpoch: number, bEpoch: number): boolean {
 }
 const H = 3600_000;
 
-// ---- 発火判定（同期。FXレートは呼び出し側が渡す）--------------------------
-function chooseDraft(uid: string, existing: Row[], rateMain: number, now: number): Draft | null {
-  const records = listRecords(uid);
-  const settings = getSettings(uid);
+// ---- 発火判定（FXレートは呼び出し側が渡す）--------------------------------
+async function chooseDraft(
+  uid: string,
+  existing: Row[],
+  rateMain: number,
+  now: number
+): Promise<Draft | null> {
+  const records = await listRecords(uid);
+  const settings = await getSettings(uid);
   const today = new Date(now);
   const todayISO = localISO(today);
 
@@ -281,22 +286,23 @@ function pickLine2(pool: string[]): string {
 
 /** ユーザーのアクセス時に遅延評価（cron不要）。総量規制 1日1通。既読含む全件を返す。 */
 export async function evaluateGohankunMessages(uid: string): Promise<GohankunMessage[]> {
-  const existing = rows(uid);
+  const existing = await rows(uid);
   const now = Date.now();
 
   // 総量規制: 今日すでに1通作っていれば新規生成しない
   const createdToday = existing.some((m) => sameLocalDay(m.created_at, now));
   if (!createdToday) {
-    let rateMain = FALLBACK_RATES_TO_JPY[getSettings(uid).mainCurrency];
+    const settings = await getSettings(uid);
+    let rateMain = FALLBACK_RATES_TO_JPY[settings.mainCurrency];
     try {
       const fx = await getRatesToJpy();
-      rateMain = fx.rates[getSettings(uid).mainCurrency] ?? rateMain;
+      rateMain = fx.rates[settings.mainCurrency] ?? rateMain;
     } catch {
       /* フォールバックレートで続行 */
     }
-    const draft = chooseDraft(uid, existing, rateMain, now);
+    const draft = await chooseDraft(uid, existing, rateMain, now);
     if (draft) {
-      getDb()
+      await getDb()
         .prepare(
           `INSERT INTO gohankun_messages
              (user_id, id, kind, text, created_at, read, cta_label, cta_href, ref)
@@ -314,15 +320,15 @@ export async function evaluateGohankunMessages(uid: string): Promise<GohankunMes
         );
     }
   }
-  return rows(uid).map(toMsg);
+  return (await rows(uid)).map(toMsg);
 }
 
 /** 既読にする（id指定 or 全件）。 */
-export function markMessagesRead(uid: string, id?: string): void {
+export async function markMessagesRead(uid: string, id?: string): Promise<void> {
   const db = getDb();
   if (id) {
-    db.prepare("UPDATE gohankun_messages SET read = 1 WHERE user_id = ? AND id = ?").run(uid, id);
+    await db.prepare("UPDATE gohankun_messages SET read = 1 WHERE user_id = ? AND id = ?").run(uid, id);
   } else {
-    db.prepare("UPDATE gohankun_messages SET read = 1 WHERE user_id = ?").run(uid);
+    await db.prepare("UPDATE gohankun_messages SET read = 1 WHERE user_id = ?").run(uid);
   }
 }

@@ -48,9 +48,9 @@ const localISO = (d: Date) =>
     d.getDate()
   ).padStart(2, "0")}`;
 
-export function buildUserFoodProfile(uid: string): UserFoodProfile {
-  const records = listRecords(uid);
-  const settings = getSettings(uid);
+export async function buildUserFoodProfile(uid: string): Promise<UserFoodProfile> {
+  const records = await listRecords(uid);
+  const settings = await getSettings(uid);
   const fallbackCity = REGION_CITY[currencyToRegion(settings.mainCurrency)] ?? "";
 
   // --- 都市: locationのキーワード最頻。無ければ通貨の地域から ---

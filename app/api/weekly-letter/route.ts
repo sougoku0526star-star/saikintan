@@ -31,13 +31,13 @@ import { formatMoney, FALLBACK_RATES_TO_JPY } from "@/lib/currency";
 
 // 先週の約束（提案）に対する達成度を、集計比較で機械判定する（AIは判定しない）。
 // unknown（判定不能）は null にして、レターで触れさせない。
-function lastWeekPromise(
+async function lastWeekPromise(
   uid: string,
   stats: PeriodStats
-): { text: string; outcome: Exclude<PromiseOutcome, "unknown"> } | null {
+): Promise<{ text: string; outcome: Exclude<PromiseOutcome, "unknown"> } | null> {
   if (stats.kind !== "week") return null;
   const prevWeekStart = shiftWeek(stats.start, -1);
-  const prev = getWeeklyAction(uid, prevWeekStart);
+  const prev = await getWeeklyAction(uid, prevWeekStart);
   if (!prev) return null;
   // 今週(stats)と同じ換算レートで先週を集計する
   const rateMain =
@@ -45,7 +45,7 @@ function lastWeekPromise(
       ? stats.totalJpy / stats.totalMain
       : FALLBACK_RATES_TO_JPY[stats.mainCurrency] ?? 1;
   const prevStats = aggregatePeriod(
-    listRecords(uid),
+    await listRecords(uid),
     "week",
     prevWeekStart,
     stats.budgetMain,
@@ -109,12 +109,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
 
-  const uid = getUserId();
+  const uid = await getUserId();
   // 週の提案を保存（約束ループP1）。週かつ記録ありのときだけ。
-  const persistWeek = (letter: WeeklyLetter) => {
+  const persistWeek = async (letter: WeeklyLetter) => {
     if (stats.kind === "week" && stats.mealsCount > 0 && letter.action) {
       try {
-        saveWeeklyAction(uid, stats.start, letter.action);
+        await saveWeeklyAction(uid, stats.start, letter.action);
       } catch (e) {
         console.error("saveWeeklyAction failed:", e);
       }
@@ -124,19 +124,19 @@ export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || stats.mealsCount === 0) {
     const letter = fallbackLetter(stats);
-    persistWeek(letter);
+    await persistWeek(letter);
     return NextResponse.json({ letter, source: "fallback" });
   }
 
   try {
     const client = new Anthropic();
-    const me = getAuthUser();
+    const me = await getAuthUser();
     const userName = me?.nickname ?? me?.username ?? null;
     const you = gohankunYou(userName);
     const term = stats.kind === "week" ? "今週" : "今月";
     const trendLabels = nutritionTrendLabels(toNutritionTrend(stats));
-    const suggestionCtx = buildSuggestionContext(uid);
-    const promise = lastWeekPromise(uid, stats);
+    const suggestionCtx = await buildSuggestionContext(uid);
+    const promise = await lastWeekPromise(uid, stats);
     const promiseBlock = promise
       ? `
 
@@ -194,12 +194,12 @@ ${suggestionCtx.profileBlock}
     ) {
       throw new Error("letter violates gohankun rules");
     }
-    persistWeek(letter);
+    await persistWeek(letter);
     return NextResponse.json({ letter, source: "ai" });
   } catch (e) {
     console.error("weekly-letter failed:", e);
     const letter = fallbackLetter(stats);
-    persistWeek(letter);
+    await persistWeek(letter);
     return NextResponse.json({ letter, source: "fallback" });
   }
 }

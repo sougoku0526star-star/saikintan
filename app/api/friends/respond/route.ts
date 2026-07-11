@@ -5,7 +5,7 @@ import { acceptFriendRequest, declineFriendRequest } from "@/lib/server/friends-
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   let body: { requesterId?: string; action?: string };
   try {
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if (!body.requesterId) {
     return NextResponse.json({ error: "requesterId required" }, { status: 400 });
   }
-  if (body.action === "accept") acceptFriendRequest(me.id, body.requesterId);
-  else declineFriendRequest(me.id, body.requesterId);
+  if (body.action === "accept") await acceptFriendRequest(me.id, body.requesterId);
+  else await declineFriendRequest(me.id, body.requesterId);
   return NextResponse.json({ ok: true });
 }

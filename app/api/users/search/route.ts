@@ -6,8 +6,8 @@ export const runtime = "nodejs";
 
 // ユーザーID検索（将来のフレンド機能の土台）。ログイン必須。
 export async function GET(req: Request) {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   const q = new URL(req.url).searchParams.get("q") || "";
-  return NextResponse.json({ users: searchUsers(q, me.id) });
+  return NextResponse.json({ users: await searchUsers(q, me.id) });
 }

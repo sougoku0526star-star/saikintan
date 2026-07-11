@@ -1,5 +1,5 @@
 // フレンド＋メッセージのサーバーリポジトリ。サーバー専用。
-import { getDb } from "./sqlite";
+import { getDb } from "./pg";
 import { randomUUID } from "node:crypto";
 import { grantImageAccess } from "./images-db";
 
@@ -8,10 +8,10 @@ export interface Brief {
   username: string | null;
 }
 
-function brief(id: string): Brief {
-  const row = getDb()
+async function brief(id: string): Promise<Brief> {
+  const row = await getDb()
     .prepare("SELECT id, username FROM users WHERE id = ?")
-    .get(id) as Brief | undefined;
+    .get<Brief>(id);
   return row ?? { id, username: null };
 }
 
@@ -19,10 +19,10 @@ function brief(id: string): Brief {
 
 export type RequestResult = "ok" | "self" | "exists" | "already";
 
-export function sendFriendRequest(fromId: string, toId: string): RequestResult {
+export async function sendFriendRequest(fromId: string, toId: string): Promise<RequestResult> {
   if (fromId === toId) return "self";
   const db = getDb();
-  const accepted = db
+  const accepted = await db
     .prepare(
       `SELECT 1 FROM friendships WHERE status='accepted'
        AND ((requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?))`
@@ -30,45 +30,45 @@ export function sendFriendRequest(fromId: string, toId: string): RequestResult {
     .get(fromId, toId, toId, fromId);
   if (accepted) return "already";
 
-  const pending = db
+  const pending = await db
     .prepare(
       `SELECT requester_id FROM friendships WHERE status='pending'
        AND ((requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?))`
     )
-    .get(fromId, toId, toId, fromId) as { requester_id: string } | undefined;
+    .get<{ requester_id: string }>(fromId, toId, toId, fromId);
   if (pending) {
     // 相手が既に自分へ申請済みなら、そのまま成立させる
     if (pending.requester_id === toId) {
-      acceptFriendRequest(fromId, toId);
+      await acceptFriendRequest(fromId, toId);
       return "ok";
     }
     return "exists";
   }
 
-  db.prepare(
+  await db.prepare(
     "INSERT INTO friendships (id, requester_id, addressee_id, status, created_at) VALUES (?,?,?,?,?)"
   ).run(randomUUID(), fromId, toId, "pending", Date.now());
   return "ok";
 }
 
-export function acceptFriendRequest(meId: string, requesterId: string): void {
-  getDb()
+export async function acceptFriendRequest(meId: string, requesterId: string): Promise<void> {
+  await getDb()
     .prepare(
       "UPDATE friendships SET status='accepted' WHERE requester_id=? AND addressee_id=? AND status='pending'"
     )
     .run(requesterId, meId);
 }
 
-export function declineFriendRequest(meId: string, requesterId: string): void {
-  getDb()
+export async function declineFriendRequest(meId: string, requesterId: string): Promise<void> {
+  await getDb()
     .prepare(
       "DELETE FROM friendships WHERE requester_id=? AND addressee_id=? AND status='pending'"
     )
     .run(requesterId, meId);
 }
 
-export function removeFriend(meId: string, otherId: string): void {
-  getDb()
+export async function removeFriend(meId: string, otherId: string): Promise<void> {
+  await getDb()
     .prepare(
       `DELETE FROM friendships WHERE status='accepted'
        AND ((requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?))`
@@ -76,37 +76,37 @@ export function removeFriend(meId: string, otherId: string): void {
     .run(meId, otherId, otherId, meId);
 }
 
-export function areFriends(a: string, b: string): boolean {
-  return !!getDb()
+export async function areFriends(a: string, b: string): Promise<boolean> {
+  return !!(await getDb()
     .prepare(
       `SELECT 1 FROM friendships WHERE status='accepted'
        AND ((requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?))`
     )
-    .get(a, b, b, a);
+    .get(a, b, b, a));
 }
 
-export function listFriends(meId: string): Brief[] {
-  const rows = getDb()
+export async function listFriends(meId: string): Promise<Brief[]> {
+  const rows = await getDb()
     .prepare(
       `SELECT CASE WHEN requester_id=? THEN addressee_id ELSE requester_id END AS other
        FROM friendships WHERE status='accepted' AND (requester_id=? OR addressee_id=?)`
     )
-    .all(meId, meId, meId) as { other: string }[];
-  return rows.map((r) => brief(r.other));
+    .all<{ other: string }>(meId, meId, meId);
+  return Promise.all(rows.map((r) => brief(r.other)));
 }
 
-export function listIncoming(meId: string): Brief[] {
-  const rows = getDb()
+export async function listIncoming(meId: string): Promise<Brief[]> {
+  const rows = await getDb()
     .prepare("SELECT requester_id FROM friendships WHERE addressee_id=? AND status='pending'")
-    .all(meId) as { requester_id: string }[];
-  return rows.map((r) => brief(r.requester_id));
+    .all<{ requester_id: string }>(meId);
+  return Promise.all(rows.map((r) => brief(r.requester_id)));
 }
 
-export function listOutgoing(meId: string): Brief[] {
-  const rows = getDb()
+export async function listOutgoing(meId: string): Promise<Brief[]> {
+  const rows = await getDb()
     .prepare("SELECT addressee_id FROM friendships WHERE requester_id=? AND status='pending'")
-    .all(meId) as { addressee_id: string }[];
-  return rows.map((r) => brief(r.addressee_id));
+    .all<{ addressee_id: string }>(meId);
+  return Promise.all(rows.map((r) => brief(r.addressee_id)));
 }
 
 // ---- メッセージ --------------------------------------------------------
@@ -134,15 +134,15 @@ export interface ChatMessage {
   record?: SharedRecord;
 }
 
-export function sendMessage(
+export async function sendMessage(
   fromId: string,
   toId: string,
   body: string
-): "ok" | "notfriends" | "empty" {
+): Promise<"ok" | "notfriends" | "empty"> {
   const text = body.trim();
   if (!text) return "empty";
-  if (!areFriends(fromId, toId)) return "notfriends";
-  getDb()
+  if (!(await areFriends(fromId, toId))) return "notfriends";
+  await getDb()
     .prepare(
       "INSERT INTO messages (id, sender_id, recipient_id, body, created_at) VALUES (?,?,?,?,?)"
     )
@@ -151,18 +151,18 @@ export function sendMessage(
 }
 
 /** アルバムの記録を、任意のコメント付きでフレンドに共有する。 */
-export function shareRecord(
+export async function shareRecord(
   fromId: string,
   toId: string,
   record: SharedRecord,
   comment: string
-): "ok" | "notfriends" | "invalid" {
+): Promise<"ok" | "notfriends" | "invalid"> {
   if (!record || !record.photo || !record.dishNameJa) return "invalid";
-  if (!areFriends(fromId, toId)) return "notfriends";
+  if (!(await areFriends(fromId, toId))) return "notfriends";
   // 写真が自前ストアの画像なら、受信者に閲覧権を付与する
   const m = /^\/api\/images\/([\w-]+)$/.exec(record.photo);
-  if (m) grantImageAccess(m[1], toId);
-  getDb()
+  if (m) await grantImageAccess(m[1], toId);
+  await getDb()
     .prepare(
       "INSERT INTO messages (id, sender_id, recipient_id, body, created_at, record) VALUES (?,?,?,?,?,?)"
     )
@@ -186,21 +186,21 @@ function parseRecord(raw: string | null): SharedRecord | undefined {
   }
 }
 
-export function listMessages(meId: string, otherId: string): ChatMessage[] {
-  if (!areFriends(meId, otherId)) return [];
-  const rows = getDb()
+export async function listMessages(meId: string, otherId: string): Promise<ChatMessage[]> {
+  if (!(await areFriends(meId, otherId))) return [];
+  const rows = await getDb()
     .prepare(
       `SELECT id, sender_id, body, created_at, record FROM messages
        WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)
        ORDER BY created_at ASC LIMIT 500`
     )
-    .all(meId, otherId, otherId, meId) as {
-    id: string;
-    sender_id: string;
-    body: string;
-    created_at: number;
-    record: string | null;
-  }[];
+    .all<{
+      id: string;
+      sender_id: string;
+      body: string;
+      created_at: number;
+      record: string | null;
+    }>(meId, otherId, otherId, meId);
   return rows.map((r) => ({
     id: r.id,
     fromMe: r.sender_id === meId,
@@ -217,20 +217,23 @@ export interface Conversation {
   fromMe: boolean;
 }
 
-export function listConversations(meId: string): Conversation[] {
-  const friends = listFriends(meId);
+export async function listConversations(meId: string): Promise<Conversation[]> {
+  const friends = await listFriends(meId);
   const db = getDb();
-  return friends
-    .map((f) => {
-      const last = db
+  const conversations = await Promise.all(
+    friends.map(async (f) => {
+      const last = await db
         .prepare(
           `SELECT sender_id, body, created_at, record FROM messages
            WHERE (sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)
            ORDER BY created_at DESC LIMIT 1`
         )
-        .get(meId, f.id, f.id, meId) as
-        | { sender_id: string; body: string; created_at: number; record: string | null }
-        | undefined;
+        .get<{ sender_id: string; body: string; created_at: number; record: string | null }>(
+          meId,
+          f.id,
+          f.id,
+          meId
+        );
       // 記録共有でコメントが無いときは、料理名をプレビューに使う
       let preview = last?.body ?? null;
       if (last?.record && !last.body) {
@@ -244,5 +247,6 @@ export function listConversations(meId: string): Conversation[] {
         fromMe: last ? last.sender_id === meId : false,
       };
     })
-    .sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0));
+  );
+  return conversations.sort((a, b) => (b.lastAt ?? 0) - (a.lastAt ?? 0));
 }

@@ -15,14 +15,14 @@ export interface FoodSuggestion {
 // 料理名オートコンプリート。候補ソースの優先順:
 // (1) ユーザーの過去記録の料理名（頻度順） (2) ユーザー辞書 (3) 公式辞書
 export async function GET(req: Request) {
-  const uid = getUserId();
+  const uid = await getUserId();
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   if (!q) return NextResponse.json({ suggestions: [] });
   const nq = q.toLowerCase();
 
   // (1) 過去記録の料理名（食事名＋品目名）を頻度集計
   const histCount = new Map<string, number>();
-  for (const r of listRecords(uid)) {
+  for (const r of await listRecords(uid)) {
     const names = [r.meal.dishNameJa, ...(r.meal.items?.map((i) => i.dishNameJa) ?? [])];
     for (const raw of names) {
       const name = (raw || "").trim();
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     .map(([label]) => ({ label, source: "history" }));
 
   // (2) ユーザー辞書
-  const userdict: FoodSuggestion[] = listFoods(uid)
+  const userdict: FoodSuggestion[] = (await listFoods(uid))
     .filter(
       (f) => f.nameJa.toLowerCase().includes(nq) || f.name.toLowerCase().includes(nq)
     )

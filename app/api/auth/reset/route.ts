@@ -16,14 +16,14 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const userId = body.token ? consumeToken(body.token, "reset") : null;
+  const userId = body.token ? await consumeToken(body.token, "reset") : null;
   if (!userId) {
     return NextResponse.json(
       { error: "リンクが無効または期限切れです" },
       { status: 400 }
     );
   }
-  setPassword(userId, body.password!);
-  deleteUserSessions(userId); // 既存セッションを失効（安全のため）
+  await setPassword(userId, body.password!);
+  await deleteUserSessions(userId); // 既存セッションを失効（安全のため）
   return NextResponse.json({ ok: true });
 }

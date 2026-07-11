@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function POST() {
   const jar = cookies();
   const sid = jar.get(SESSION_COOKIE)?.value;
-  if (sid) deleteSession(sid);
+  if (sid) await deleteSession(sid);
   jar.set(SESSION_COOKIE, "", { httpOnly: true, path: "/", maxAge: 0 });
   return NextResponse.json({ ok: true });
 }

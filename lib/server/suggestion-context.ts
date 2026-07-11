@@ -12,8 +12,8 @@ export const SUGGESTION_RULES = `# 提案のルール（提案は必ず1個だ�
 - 「野菜を食べよう」のような、どこで何をすればいいか不明な抽象提案は禁止。必ず「どこで・何を」まで言う`;
 
 /** 提案プロンプトに埋め込む、この人の記録プロファイル＋都市の候補アクション。 */
-export function buildSuggestionContext(uid: string): { profileBlock: string; city: string } {
-  const profile = buildUserFoodProfile(uid);
+export async function buildSuggestionContext(uid: string): Promise<{ profileBlock: string; city: string }> {
+  const profile = await buildUserFoodProfile(uid);
   const local = describeLocalActions(profile.city);
   const profileBlock = [
     "# この人について（記録から。実在する店・料理はそのまま使ってよい）",

@@ -6,13 +6,13 @@ export const runtime = "nodejs";
 
 // ユーザー辞書の一覧
 export async function GET() {
-  const uid = getUserId();
-  return NextResponse.json({ foods: listFoods(uid) });
+  const uid = await getUserId();
+  return NextResponse.json({ foods: await listFoods(uid) });
 }
 
 // ユーザー辞書へ追加/更新（昇格）
 export async function POST(req: Request) {
-  const uid = getUserId();
+  const uid = await getUserId();
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   if (!name && !nameJa) {
     return NextResponse.json({ error: "name required" }, { status: 400 });
   }
-  const food = upsertFood(uid, {
+  const food = await upsertFood(uid, {
     slug: body.slug ? String(body.slug) : undefined,
     name: name || nameJa,
     nameJa: nameJa || name,

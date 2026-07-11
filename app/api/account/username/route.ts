@@ -10,7 +10,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  const user = getAuthUser();
+  const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   let body: { username?: string };
   try {
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const result = setUsername(user.id, body.username || "");
+  const result = await setUsername(user.id, body.username || "");
   if (result !== "ok") {
     return NextResponse.json({ error: MESSAGES[result] }, { status: 400 });
   }

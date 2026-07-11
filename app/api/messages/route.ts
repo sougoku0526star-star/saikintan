@@ -13,22 +13,22 @@ export const runtime = "nodejs";
 
 // スレッド取得：?with=<userId>
 export async function GET(req: Request) {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   const withId = new URL(req.url).searchParams.get("with") || "";
-  if (!withId || !areFriends(me.id, withId)) {
+  if (!withId || !(await areFriends(me.id, withId))) {
     return NextResponse.json({ error: "フレンドではありません" }, { status: 403 });
   }
-  const friend = getUserById(withId);
+  const friend = await getUserById(withId);
   return NextResponse.json({
     friend: friend ? { id: friend.id, username: friend.username } : { id: withId, username: null },
-    messages: listMessages(me.id, withId),
+    messages: await listMessages(me.id, withId),
   });
 }
 
 // 送信：{ to, body } 通常メッセージ / { to, body, record } 記録の共有
 export async function POST(req: Request) {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   let body: { to?: string; body?: string; record?: SharedRecord };
   try {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   }
 
   if (body.record) {
-    const result = shareRecord(me.id, body.to || "", body.record, body.body || "");
+    const result = await shareRecord(me.id, body.to || "", body.record, body.body || "");
     if (result !== "ok") {
       return NextResponse.json(
         { error: result === "notfriends" ? "フレンドではありません" : "記録が不正です" },
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const result = sendMessage(me.id, body.to || "", body.body || "");
+  const result = await sendMessage(me.id, body.to || "", body.body || "");
   if (result !== "ok") {
     return NextResponse.json(
       { error: result === "notfriends" ? "フレンドではありません" : "本文が空です" },

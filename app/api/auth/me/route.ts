@@ -4,7 +4,7 @@ import { getAuthUser } from "@/lib/server/user";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const user = getAuthUser();
+  const user = await getAuthUser();
   return NextResponse.json({
     user: user
       ? {

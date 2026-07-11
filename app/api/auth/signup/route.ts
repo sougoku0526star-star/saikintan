@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   }
 
   const anon = getAnonUid();
-  const user = createUser(email, password);
+  const user = await createUser(email, password);
   if (!user) {
     return NextResponse.json(
       { error: "このメールアドレスは既に登録されています" },
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = createSession(user.id);
+  const token = await createSession(user.id);
   cookies().set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -47,10 +47,10 @@ export async function POST(req: Request) {
   });
 
   // ログイン前の匿名データをアカウントへ引き継ぐ
-  if (anon) migrateData(anon, user.id);
+  if (anon) await migrateData(anon, user.id);
 
   // メール確認リンクを送信（開発時はdevLinkを返す）
-  const verifyToken = createToken(user.id, "verify", DAY);
+  const verifyToken = await createToken(user.id, "verify", DAY);
   const url = `${baseUrl(req)}/verify?token=${verifyToken}`;
   const mail = await sendAuthLink(
     user.email,

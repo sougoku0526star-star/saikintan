@@ -126,7 +126,8 @@ export async function POST(req: Request) {
   if (body.slug || body.foodId) {
     const food = findFood(body.foodId ?? body.slug!);
     if (!food) return NextResponse.json({ error: "food not found" }, { status: 404 });
-    const region = currencyToRegion(getSettings(getUserId()).mainCurrency);
+    const uidForLookup = await getUserId();
+    const region = currencyToRegion((await getSettings(uidForLookup)).mainCurrency);
     const meal = buildMeal(food, {
       photo: body.photo || "",
       portions: body.portions ?? 1,
@@ -151,12 +152,12 @@ export async function POST(req: Request) {
     .slice(0, 8);
   if ((body.imageBase64 || hints.length) && apiKey) {
     // ユーザー辞書はサーバー（DB）から取得（クライアント送信値は使わない）
-    const uid = getUserId();
-    const userFoods: UserFoodLite[] = listFoods(uid);
-    const me = getAuthUser();
+    const uid = await getUserId();
+    const userFoods: UserFoodLite[] = await listFoods(uid);
+    const me = await getAuthUser();
     const userName = me?.nickname ?? me?.username ?? null;
     // ユーザーの地域（メイン通貨から推定）。チェーン料理の地域補正に使う。
-    const userRegion = currencyToRegion(getSettings(uid).mainCurrency);
+    const userRegion = currencyToRegion((await getSettings(uid)).mainCurrency);
 
     // AIが品目を返せない/失敗しても、申告名があれば必ずそれで記録を作る（「不明な料理」にしない）。
     const buildFromHints = (caption?: string) => {

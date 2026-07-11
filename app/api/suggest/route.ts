@@ -51,16 +51,16 @@ function timeBand(): string {
 
 // 残り回数だけ返す（UIの初期表示用・消費しない）。
 export async function GET() {
-  const uid = getUserId();
-  return NextResponse.json({ remaining: remainingToday(uid, ACTION, DAILY_LIMIT), limit: DAILY_LIMIT });
+  const uid = await getUserId();
+  return NextResponse.json({ remaining: await remainingToday(uid, ACTION, DAILY_LIMIT), limit: DAILY_LIMIT });
 }
 
 // ワンタップ提案（入力パラメータなし）。
 export async function POST() {
-  const uid = getUserId();
+  const uid = await getUserId();
 
   // レート制限：上限到達なら AI を呼ばず定型を返す
-  const gate = consumeToday(uid, ACTION, DAILY_LIMIT);
+  const gate = await consumeToday(uid, ACTION, DAILY_LIMIT);
   if (!gate.allowed) {
     return NextResponse.json({ suggestion: OVER_LIMIT, reason: "", remaining: 0, source: "limit" });
   }
@@ -72,8 +72,8 @@ export async function POST() {
 
   try {
     // 今週の方向感＋予算ステータスをサーバー側で集計
-    const records = listRecords(uid);
-    const settings = getSettings(uid);
+    const records = await listRecords(uid);
+    const settings = await getSettings(uid);
     let rateMain = FALLBACK_RATES_TO_JPY[settings.mainCurrency] ?? 1;
     try {
       const fx = await getRatesToJpy();
@@ -92,7 +92,7 @@ export async function POST() {
       rateMain
     );
     const trendLabels = nutritionTrendLabels(toNutritionTrend(stats));
-    const ctx = buildSuggestionContext(uid);
+    const ctx = await buildSuggestionContext(uid);
 
     const prompt = `${timeBand()}の時間帯だよ。今の${
       ctx.city || "この街"

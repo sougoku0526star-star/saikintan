@@ -10,13 +10,13 @@ import { isCurrency } from "@/lib/currency";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const uid = getUserId();
-  const s = getSettings(uid);
+  const uid = await getUserId();
+  const s = await getSettings(uid);
   return NextResponse.json({ monthlyBudget: s.monthlyBudget, mainCurrency: s.mainCurrency });
 }
 
 export async function POST(req: Request) {
-  const uid = getUserId();
+  const uid = await getUserId();
   let body: { monthlyBudget?: number; mainCurrency?: string };
   try {
     body = await req.json();
@@ -24,11 +24,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
   if (typeof body.monthlyBudget === "number") {
-    setMonthlyBudget(uid, body.monthlyBudget);
+    await setMonthlyBudget(uid, body.monthlyBudget);
   }
   if (isCurrency(body.mainCurrency)) {
-    setMainCurrency(uid, body.mainCurrency);
+    await setMainCurrency(uid, body.mainCurrency);
   }
-  const s = getSettings(uid);
+  const s = await getSettings(uid);
   return NextResponse.json({ monthlyBudget: s.monthlyBudget, mainCurrency: s.mainCurrency });
 }

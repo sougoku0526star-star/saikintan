@@ -13,10 +13,10 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const user = body.email ? findUserByEmail(body.email) : undefined;
+  const user = body.email ? await findUserByEmail(body.email) : undefined;
   let devUrl: string | undefined;
   if (user) {
-    const token = createToken(user.id, "reset", HOUR);
+    const token = await createToken(user.id, "reset", HOUR);
     const url = `${baseUrl(req)}/reset?token=${token}`;
     const mail = await sendAuthLink(
       user.email,

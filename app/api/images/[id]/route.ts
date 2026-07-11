@@ -8,10 +8,10 @@ export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const img = getImage(params.id);
+  const img = await getImage(params.id);
   if (!img) return new NextResponse("not found", { status: 404 });
   // 所有者、または共有で閲覧を許可されたユーザーのみ
-  if (!canAccessImage(params.id, getUserId())) {
+  if (!(await canAccessImage(params.id, await getUserId()))) {
     return new NextResponse("forbidden", { status: 403 });
   }
   return new NextResponse(new Uint8Array(img.bytes), {

@@ -28,7 +28,7 @@ function nutritionOf(x: {
 }
 
 /** 記録保存時に呼ぶ。学習した品目は userNamed フラグをクリアして再学習を防ぐ。 */
-export function learnFromMeal(userId: string, meal: MealEntry, isNew: boolean): void {
+export async function learnFromMeal(userId: string, meal: MealEntry, isNew: boolean): Promise<void> {
   // A: 申告名(hints)が公式辞書に無ければ学習（新規記録時のみ）。
   //    申告名に一致する品目があればその栄養、無ければ（セット名など）合計栄養を使う。
   if (isNew) {
@@ -40,7 +40,7 @@ export function learnFromMeal(userId: string, meal: MealEntry, isNew: boolean): 
       );
       const src = item?.nutrition ?? meal.nutrition;
       if (!src) continue;
-      upsertFood(userId, { name: h, nameJa: h, ...nutritionOf(src) }, true);
+      await upsertFood(userId, { name: h, nameJa: h, ...nutritionOf(src) }, true);
     }
   }
 
@@ -52,7 +52,7 @@ export function learnFromMeal(userId: string, meal: MealEntry, isNew: boolean): 
       validName(it.dishNameJa) &&
       !lookupOfficialByName(it.dishNameJa)
     ) {
-      upsertFood(
+      await upsertFood(
         userId,
         { name: it.dishNameJa, nameJa: it.dishNameJa, ...nutritionOf(it.nutrition) },
         true

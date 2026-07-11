@@ -9,7 +9,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const uid = getUserId();
-  deleteRecord(uid, params.id);
+  const uid = await getUserId();
+  await deleteRecord(uid, params.id);
   return NextResponse.json({ ok: true });
 }

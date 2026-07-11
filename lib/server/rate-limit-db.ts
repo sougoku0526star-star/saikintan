@@ -1,5 +1,5 @@
 // AI呼び出しの1日あたり回数制限（P3「ご飯君に聞く」など）。広告+Exit原価設計のガード。
-import { getDb } from "./sqlite";
+import { getDb } from "./pg";
 
 function todayYMD(): string {
   const d = new Date();
@@ -8,29 +8,29 @@ function todayYMD(): string {
   ).padStart(2, "0")}`;
 }
 
-function todayCount(uid: string, action: string): number {
-  const row = getDb()
+async function todayCount(uid: string, action: string): Promise<number> {
+  const row = await getDb()
     .prepare(
       "SELECT count FROM ai_rate_limit WHERE user_id = ? AND action = ? AND ymd = ?"
     )
-    .get(uid, action, todayYMD()) as { count: number } | undefined;
+    .get<{ count: number }>(uid, action, todayYMD());
   return row?.count ?? 0;
 }
 
 /** 消費せずに残り回数だけ見る（UI表示用）。 */
-export function remainingToday(uid: string, action: string, limit: number): number {
-  return Math.max(0, limit - todayCount(uid, action));
+export async function remainingToday(uid: string, action: string, limit: number): Promise<number> {
+  return Math.max(0, limit - (await todayCount(uid, action)));
 }
 
 /** 上限未満なら1回消費して allowed=true。上限到達なら消費せず allowed=false。 */
-export function consumeToday(
+export async function consumeToday(
   uid: string,
   action: string,
   limit: number
-): { allowed: boolean; remaining: number } {
-  const count = todayCount(uid, action);
+): Promise<{ allowed: boolean; remaining: number }> {
+  const count = await todayCount(uid, action);
   if (count >= limit) return { allowed: false, remaining: 0 };
-  getDb()
+  await getDb()
     .prepare(
       `INSERT INTO ai_rate_limit (user_id, action, ymd, count) VALUES (?,?,?,1)
        ON CONFLICT(user_id, action, ymd) DO UPDATE SET count = count + 1`

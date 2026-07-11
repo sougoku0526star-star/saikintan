@@ -48,7 +48,7 @@ function fallbackMemoryLetter(you: string): MemoryLetter {
 }
 
 export async function POST(req: Request) {
-  const uid = getUserId();
+  const uid = await getUserId();
   let body: { recordId?: string };
   try {
     body = await req.json();
@@ -59,12 +59,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "recordId required" }, { status: 400 });
   }
 
-  const rec = getRecord(uid, body.recordId);
+  const rec = await getRecord(uid, body.recordId);
   if (!rec) {
     return NextResponse.json({ error: "record not found" }, { status: 404 });
   }
 
-  const me = getAuthUser();
+  const me = await getAuthUser();
   const you = gohankunYou(me?.nickname ?? me?.username ?? null);
 
   // ユーザーが書き換え済みのレターは、再生成で絶対に上書きしない（APIレベルのガード）
@@ -75,10 +75,10 @@ export async function POST(req: Request) {
     });
   }
 
-  const save = (letter: MemoryLetter, source: string) => {
+  const save = async (letter: MemoryLetter, source: string) => {
     rec.meal.isMemory = true;
     rec.meal.memoryLetter = letter;
-    upsertRecord(uid, rec);
+    await upsertRecord(uid, rec);
     return NextResponse.json({ letter, source });
   };
 

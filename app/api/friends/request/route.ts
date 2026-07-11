@@ -12,7 +12,7 @@ const MSG: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  const me = getAuthUser();
+  const me = await getAuthUser();
   if (!me) return NextResponse.json({ error: "未ログイン" }, { status: 401 });
   let body: { username?: string };
   try {
@@ -20,11 +20,11 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const target = getUserByUsername(body.username || "");
+  const target = await getUserByUsername(body.username || "");
   if (!target) {
     return NextResponse.json({ error: "そのユーザーIDは見つかりません" }, { status: 404 });
   }
-  const result = sendFriendRequest(me.id, target.id);
+  const result = await sendFriendRequest(me.id, target.id);
   if (result !== "ok") {
     return NextResponse.json({ error: MSG[result] }, { status: 400 });
   }
