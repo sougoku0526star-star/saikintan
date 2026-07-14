@@ -8,32 +8,44 @@
 // libSQL は SQLite 互換なので、ローカルファイルでも Turso でも同じSQL・同じスキーマが動く。
 //
 // ※ ファイル名は歴史的経緯で pg.ts のまま（10箇所の import 安定のため）。中身は libSQL。
-import { createClient, type Client, type InArgs, type InValue } from "@libsql/client";
+import type { Client, InArgs, InValue } from "@libsql/client";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 const g = globalThis as unknown as {
   __saikintanDb?: Client;
+  __saikintanClient?: Promise<Client>;
   __saikintanSchemaReady?: Promise<void>;
 };
 
-function client(): Client {
-  if (!g.__saikintanDb) {
-    const url = process.env.TURSO_DATABASE_URL;
-    const authToken = process.env.TURSO_AUTH_TOKEN;
-    if (url && authToken) {
-      // 本番: Turso（libSQL）
-      g.__saikintanDb = createClient({ url, authToken });
-    } else {
-      // 開発: ローカルファイルSQLite（従来どおり .data/saikintan.db）
-      const dir = path.join(process.cwd(), ".data");
-      mkdirSync(dir, { recursive: true });
-      g.__saikintanDb = createClient({
-        url: `file:${path.join(dir, "saikintan.db")}`,
-      });
-    }
+// クライアントの生成。接続先で「実装」も切り替えるのが重要:
+//   - Turso(本番/Vercel) → @libsql/client/web （fetchベースの pure-JS。ネイティブ依存なし）
+//     ※ デフォルトの @libsql/client(node) はネイティブ libsql バイナリを読み込むため、
+//       Vercelのサーバーレス関数バンドルに含まれず import 時に落ちる（→ 500・空レスポンス
+//       →クライアントで "unexpected end of JSON input"）。remote は /web を使うと回避できる。
+//   - ローカルファイル(開発) → @libsql/client(node) （file: をサポート）
+async function makeClient(): Promise<Client> {
+  const url = process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+  if (url && authToken) {
+    const { createClient } = await import("@libsql/client/web");
+    return createClient({ url, authToken });
   }
-  return g.__saikintanDb;
+  const { createClient } = await import("@libsql/client");
+  const dir = path.join(process.cwd(), ".data");
+  mkdirSync(dir, { recursive: true });
+  return createClient({ url: `file:${path.join(dir, "saikintan.db")}` });
+}
+
+function getClient(): Promise<Client> {
+  if (g.__saikintanDb) return Promise.resolve(g.__saikintanDb);
+  if (!g.__saikintanClient) {
+    g.__saikintanClient = makeClient().then((c) => {
+      g.__saikintanDb = c;
+      return c;
+    });
+  }
+  return g.__saikintanClient;
 }
 
 // ---- スキーマ（SQLite方言。libSQL/Tursoでそのまま動く）-------------------
@@ -184,7 +196,7 @@ const ALTER_SQL: string[] = [
 async function ensureSchema(): Promise<void> {
   if (!g.__saikintanSchemaReady) {
     g.__saikintanSchemaReady = (async () => {
-      const c = client();
+      const c = (await getClient());
       await c.executeMultiple(SCHEMA_SQL);
       for (const sql of ALTER_SQL) {
         try {
@@ -217,17 +229,17 @@ function prepare(sql: string): Stmt {
   return {
     async all<T>(...params: unknown[]) {
       await ensureSchema();
-      const res = await client().execute({ sql, args: toArgs(params) });
+      const res = await (await getClient()).execute({ sql, args: toArgs(params) });
       return res.rows as unknown as T[];
     },
     async get<T>(...params: unknown[]) {
       await ensureSchema();
-      const res = await client().execute({ sql, args: toArgs(params) });
+      const res = await (await getClient()).execute({ sql, args: toArgs(params) });
       return (res.rows[0] as unknown as T) ?? undefined;
     },
     async run(...params: unknown[]) {
       await ensureSchema();
-      const res = await client().execute({ sql, args: toArgs(params) });
+      const res = await (await getClient()).execute({ sql, args: toArgs(params) });
       return { changes: res.rowsAffected };
     },
   };
@@ -236,7 +248,7 @@ function prepare(sql: string): Stmt {
 /** 生のSQLを直接実行（複数文をセミコロン区切りでまとめて渡せる。プレースホルダ無し）。 */
 async function exec(sql: string): Promise<void> {
   await ensureSchema();
-  await client().executeMultiple(sql);
+  await (await getClient()).executeMultiple(sql);
 }
 
 // トランザクション。auth-db 互換のため、コールバックには Postgres風の
@@ -248,7 +260,7 @@ interface TxClient {
 
 async function transaction<T>(fn: (tx: TxClient) => Promise<T>): Promise<T> {
   await ensureSchema();
-  const tx = await client().transaction("write");
+  const tx = await (await getClient()).transaction("write");
   try {
     const wrapped: TxClient = {
       async query(text: string, params: unknown[] = []) {

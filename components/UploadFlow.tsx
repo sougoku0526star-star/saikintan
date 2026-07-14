@@ -115,8 +115,21 @@ export default function UploadFlow() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ ...payload, photo: photoUrl }),
         });
-        const data = await res.json();
-        if (!res.ok || !data.meal) throw new Error(data.error || "analyze failed");
+        // サーバーがクラッシュして空レスポンスを返すと res.json() が
+        // "unexpected end of JSON input" を投げるため、先に本文を取り出して安全に扱う。
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(
+            `解析に失敗しました（サーバーエラー HTTP ${res.status}）。時間をおいて試してね。`
+          );
+        }
+        let data: { meal?: MealEntry; confidence?: number; source?: string } = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error("解析結果を受け取れませんでした（応答が空でした）。");
+        }
+        if (!data.meal) throw new Error("料理を判定できませんでした。写真か料理名を変えて試してね。");
         // 既定の日付はローカル今日に。価格は0（手入力）。
         const hintNames = Array.isArray(payload.dish_name_hints)
           ? (payload.dish_name_hints as string[])
