@@ -1,0 +1,5 @@
+# 生成物（レビュー用Markdown）
+review.md
+
+# 政府DBのローカルJSON（サイズ大・setupスクリプトで再生成可能）
+data/
