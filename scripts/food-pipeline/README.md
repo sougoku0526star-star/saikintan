@@ -54,6 +54,37 @@ node scripts/food-pipeline/apply.mjs
 node scripts/food-pipeline/apply.mjs --dry-run   # 変更せず結果だけ確認
 ```
 
+## 入口A: 政府DBからの新規生成（generate.mjs）
+
+```bash
+# 日本（型1 compose・AIを使うので env が必要）
+node --env-file=.env.local scripts/food-pipeline/generate.mjs \
+  --region jp --dishes "よだれ鶏,生姜焼き定食"
+node --env-file=.env.local scripts/food-pipeline/generate.mjs \
+  --region jp --from demand --limit 20     # demand-ranking.json の上位から
+
+# 型2（sg/au・直引き）は追って対応。--limit で1実行の処理上限（既定20・原価管理）
+```
+
+### 日本アダプタ（型1）の事前セットアップ
+
+栄養値は文科省の成分表から作る。**Excel を一度だけローカルJSONに変換**する:
+
+1. 「日本食品標準成分表（八訂）増補2023年」の Excel をダウンロード
+   （文科省 食品成分データベース: https://www.mext.go.jp/a_menu/syokuhinseibun/mext_00001.html
+   ／二次利用可・**出典表記義務あり**）。「表全体」シートを含むもの。
+2. 変換:
+   ```bash
+   node scripts/food-pipeline/setup-mext.mjs "<成分表Excelのパス>.xlsx"
+   # → scripts/food-pipeline/data/mext-seibun.json（可食部100gあたり・約2500食品）
+   ```
+   - `data/` は `.gitignore` 済み（サイズ大）。このスクリプトでいつでも再生成できる。
+   - 成分識別子（`ENERC_KCAL`/`PROT-`/`NACL_EQ` 等）で列を特定するため、列順が変わっても追従する。
+
+**compose の流れ**: 料理名 → LETTER_MODEL で構成食材＋グラム推定 → 各食材を成分表へ
+グラウンディング照合（fuzzy 上位からAIが最終選択）→ グラム換算して合算 → 公式フォーマット。
+栄養値は必ず成分表由来（AIは同定の補助のみ）。`source` に出典表記を必ず入れる。
+
 ## 自動検品（_warnings）
 
 候補生成時に以下を検査し、怪しいものへ警告を立てる（**自動却下はしない・目視の注意喚起のみ**）:
