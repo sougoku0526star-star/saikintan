@@ -85,6 +85,19 @@ node --env-file=.env.local scripts/food-pipeline/generate.mjs \
 グラウンディング照合（fuzzy 上位からAIが最終選択）→ グラム換算して合算 → 公式フォーマット。
 栄養値は必ず成分表由来（AIは同定の補助のみ）。`source` に出典表記を必ず入れる。
 
+### 型2アダプタ（直引き・AI不使用） — AU / SG
+
+`lib/type2.mjs` の `directLookup` を共用。料理単位の栄養ソースを料理名で直引きし、
+公式フォーマットへ変換するだけ（compose不要・**AI呼び出しなし＝原価ゼロ**、confidence=高「A」）。
+
+- **AU（`adapters/au.mjs`）**: ソース優先順は `data/au-source.json`（AFCD料理単位抽出・任意）→
+  無ければ既存 `lib/au-dishes.json`（32品）をフォールバックに使う。**クローン直後でも動く**。
+  ```bash
+  node scripts/food-pipeline/generate.mjs --region au --dishes "ミートパイ"
+  ```
+- **SG（`adapters/sg.mjs`）**: 追って対応。HPBの公開形態・ライセンス・二次利用可否を確認し、
+  `data/hpb-dishes.json` を用意してから型2として実装する（型2の枠組みは AU と同じ `type2.mjs`）。
+
 ## 自動検品（_warnings）
 
 候補生成時に以下を検査し、怪しいものへ警告を立てる（**自動却下はしない・目視の注意喚起のみ**）:
