@@ -1,5 +1,8 @@
 # 生成物（レビュー用Markdown）
 review.md
 
+# 生成物（需要ランキング・実DB由来で再生成可能）
+demand-ranking.json
+
 # 政府DBのローカルJSON（サイズ大・setupスクリプトで再生成可能）
 data/
